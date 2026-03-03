@@ -4,15 +4,23 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from typing import List, Dict, Optional
 import xml.etree.ElementTree as ET
+import re
 
 import requests
 
 
 # 一些科技新闻 RSS/Atom 源，你可以按需增删
-FEEDS = {
+TECH_FEEDS = {
     "Hacker News – Frontpage": "https://hnrss.org/frontpage",
     "The Verge – Tech": "https://www.theverge.com/rss/index.xml",
     "TechCrunch": "https://techcrunch.com/feed/",
+}
+
+# 一些财经新闻 RSS 源（尽量选择公开可访问的）
+FINANCE_FEEDS = {
+    "Yahoo Finance – Top Stories": "https://finance.yahoo.com/rss/topstories",
+    "CNBC – Top News": "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+    "MarketWatch – Top Stories": "https://feeds.content.dowjones.io/public/rss/mw_topstories",
 }
 
 # 过去多少小时的资讯
@@ -24,6 +32,9 @@ MAX_ITEMS_PER_SOURCE = 15
 # 全局最多推送多少条，避免消息太长
 MAX_TOTAL_ITEMS = 40
 
+# 交给大模型总结时，每个类别最多提供多少篇（避免 prompt 过长）
+MAX_ITEMS_FOR_LLM_PER_CATEGORY = 25
+
 
 def parse_rss_datetime(date_str: str) -> Optional[datetime]:
     """
@@ -33,9 +44,11 @@ def parse_rss_datetime(date_str: str) -> Optional[datetime]:
     if not date_str:
         return None
 
+    s = date_str.strip()
+
     # 常见格式：RFC 2822 / RFC 822，比如 "Mon, 02 Mar 2026 10:00:00 GMT"
     try:
-        dt = parsedate_to_datetime(date_str)
+        dt = parsedate_to_datetime(s)
         if dt.tzinfo is None:
             # 如果没有时区信息，默认为 UTC
             dt = dt.replace(tzinfo=timezone.utc)
@@ -43,7 +56,24 @@ def parse_rss_datetime(date_str: str) -> Optional[datetime]:
     except Exception:
         pass
 
-    # 其他 ISO8601 等格式可以再按需扩展
+    # ISO8601（Atom 常见）：2026-03-02T10:00:00Z / 2026-03-02T10:00:00+00:00 / +0000
+    try:
+        iso = s
+        if iso.endswith("Z"):
+            iso = iso[:-1] + "+00:00"
+
+        # 处理 +0000 / -0800 这种无冒号的时区偏移
+        m = re.match(r"^(.*)([+-]\d{2})(\d{2})$", iso)
+        if m:
+            iso = f"{m.group(1)}{m.group(2)}:{m.group(3)}"
+
+        dt = datetime.fromisoformat(iso)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        pass
+
     return None
 
 
@@ -52,10 +82,22 @@ def is_within_last_hours(dt: datetime, hours: int) -> bool:
     return now - dt <= timedelta(hours=hours)
 
 
-def fetch_feed(url: str, source_name: str) -> List[Dict]:
+def _pick_atom_link(entry: ET.Element) -> str:
+    # Atom 的 link 可能有多个，优先 rel="alternate"
+    for link_el in entry.findall("{*}link"):
+        rel = (link_el.get("rel") or "").strip().lower()
+        href = (link_el.get("href") or "").strip()
+        if not href:
+            continue
+        if rel in ("", "alternate"):
+            return href
+    return ""
+
+
+def fetch_feed(url: str, source_name: str, category: str) -> List[Dict]:
     """
     抓取单个 RSS/Atom 源，返回过去 HOURS_WINDOW 小时内的条目列表。
-    每条数据包含：title, link, published_at, source。
+    每条数据包含：title, link, published_at, source, category。
     """
     print(f"Fetching feed: {source_name} ({url})")
     try:
@@ -78,7 +120,14 @@ def fetch_feed(url: str, source_name: str) -> List[Dict]:
     for item in root.findall(".//item"):
         title = (item.findtext("title") or "").strip()
         link = (item.findtext("link") or "").strip()
+        if not link:
+            guid = (item.findtext("guid") or "").strip()
+            if guid.startswith("http://") or guid.startswith("https://"):
+                link = guid
+
         pub_raw = (item.findtext("pubDate") or "").strip()
+        if not pub_raw:
+            pub_raw = (item.findtext("{*}date") or "").strip()  # dc:date 等
 
         pub_dt = parse_rss_datetime(pub_raw)
         if pub_dt is None:
@@ -97,19 +146,17 @@ def fetch_feed(url: str, source_name: str) -> List[Dict]:
                 "link": link,
                 "published_at": pub_dt,
                 "source": source_name,
+                "category": category,
             }
         )
 
     # 2) Atom: <entry>
-    # 通常命名空间为 {http://www.w3.org/2005/Atom}
-    # 为了简单，我们用通配方式查找
-    for entry in root.findall(".//{http://www.w3.org/2005/Atom}entry"):
-        title = (entry.findtext("{http://www.w3.org/2005/Atom}title") or "").strip()
-        link_el = entry.find("{http://www.w3.org/2005/Atom}link")
-        href = link_el.get("href").strip() if link_el is not None else ""
-        updated_raw = (
-            entry.findtext("{http://www.w3.org/2005/Atom}updated") or ""
-        ).strip()
+    for entry in root.findall(".//{*}entry"):
+        title = (entry.findtext("{*}title") or "").strip()
+        href = _pick_atom_link(entry)
+        updated_raw = (entry.findtext("{*}updated") or "").strip()
+        if not updated_raw:
+            updated_raw = (entry.findtext("{*}published") or "").strip()
 
         pub_dt = parse_rss_datetime(updated_raw)
         if pub_dt is None:
@@ -127,6 +174,7 @@ def fetch_feed(url: str, source_name: str) -> List[Dict]:
                 "link": href,
                 "published_at": pub_dt,
                 "source": source_name,
+                "category": category,
             }
         )
 
@@ -135,37 +183,46 @@ def fetch_feed(url: str, source_name: str) -> List[Dict]:
     return items[:MAX_ITEMS_PER_SOURCE]
 
 
-def collect_news() -> List[Dict]:
-    """
-    抓取所有 FEEDS，合并成一个列表，并按时间排序。
-    """
-    all_items: List[Dict] = []
-    for source_name, url in FEEDS.items():
-        items = fetch_feed(url, source_name)
-        all_items.extend(items)
-
-    # 去重（按标题+链接简单去重）
+def _dedupe_and_sort(items: List[Dict]) -> List[Dict]:
     unique_map = {}
-    for item in all_items:
-        key = (item["title"], item["link"])
+    for item in items:
+        key = (item.get("title"), item.get("link"))
         if key not in unique_map:
             unique_map[key] = item
 
     unique_items = list(unique_map.values())
     unique_items.sort(key=lambda x: x["published_at"], reverse=True)
+    return unique_items
 
+
+def collect_news(feeds: Dict[str, str], category: str) -> List[Dict]:
+    """
+    抓取一个类别的所有 feeds，合并并排序。
+    """
+    all_items: List[Dict] = []
+    for source_name, url in feeds.items():
+        items = fetch_feed(url, source_name, category=category)
+        all_items.extend(items)
+
+    unique_items = _dedupe_and_sort(all_items)
     return unique_items[:MAX_TOTAL_ITEMS]
 
 
-def build_markdown(news_items: List[Dict]) -> str:
+def collect_all_news() -> List[Dict]:
+    tech = collect_news(TECH_FEEDS, category="科技")
+    finance = collect_news(FINANCE_FEEDS, category="财经")
+    return _dedupe_and_sort(tech + finance)[: (MAX_TOTAL_ITEMS * 2)]
+
+
+def build_raw_markdown(news_items: List[Dict]) -> str:
     """
-    把资讯列表转成 Markdown 文本，用于 Server 酱的 desp。
+    把资讯列表转成 Markdown 文本（不走大模型），用于 Server 酱的 desp。
     """
     if not news_items:
-        return "过去 24 小时内，未从配置的科技资讯源中抓取到符合条件的内容。"
+        return "过去 24 小时内，未从配置的资讯源中抓取到符合条件的内容。"
 
     lines = []
-    lines.append(f"过去 {HOURS_WINDOW} 小时科技资讯汇总（UTC 时间）：")
+    lines.append(f"过去 {HOURS_WINDOW} 小时资讯列表（UTC 时间）：")
     lines.append("")
     for idx, item in enumerate(news_items, start=1):
         pub_str = item["published_at"].astimezone(timezone.utc).strftime(
@@ -174,16 +231,108 @@ def build_markdown(news_items: List[Dict]) -> str:
         title = item["title"]
         link = item["link"]
         source = item["source"]
+        category = item.get("category") or "未知"
 
         # 每条按 Markdown 列表输出
         lines.append(
-            f"{idx}. **{title}**  \n"
+            f"{idx}. **[{category}] {title}**  \n"
             f"   来源：{source}  \n"
             f"   时间：{pub_str}  \n"
             f"   链接：{link}"
         )
 
     return "\n".join(lines)
+
+
+def _render_articles_for_llm(news_items: List[Dict]) -> str:
+    """
+    将文章列表渲染给大模型作为“材料”，每篇给一个稳定编号，便于在摘要中引用出处。
+    """
+    lines = []
+    for i, item in enumerate(news_items, start=1):
+        aid = f"A{i:02d}"
+        item["aid"] = aid
+        pub_str = item["published_at"].astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        lines.append(
+            f"{aid} | {item.get('category','未知')} | {item.get('source','')} | {pub_str} | {item.get('title','').strip()} | {item.get('link','').strip()}"
+        )
+    return "\n".join(lines)
+
+
+def summarize_with_deepseek(news_items: List[Dict]) -> Optional[str]:
+    """
+    使用 DeepSeek 对过去24小时的科技+财经资讯做汇总，并在每条汇总中附上出处链接。
+    需要环境变量：
+    - DEEPSEEK_API_KEY（必填）
+    可选：
+    - DEEPSEEK_MODEL（默认 deepseek-chat）
+    - DEEPSEEK_BASE_URL（默认 https://api.deepseek.com）
+    """
+    api_key = (os.environ.get("DEEPSEEK_API_KEY") or "").strip()
+    if not api_key:
+        return None
+
+    base_url = (os.environ.get("DEEPSEEK_BASE_URL") or "https://api.deepseek.com").strip().rstrip("/")
+    model = (os.environ.get("DEEPSEEK_MODEL") or "deepseek-chat").strip()
+
+    tech = [x for x in news_items if x.get("category") == "科技"][:MAX_ITEMS_FOR_LLM_PER_CATEGORY]
+    fin = [x for x in news_items if x.get("category") == "财经"][:MAX_ITEMS_FOR_LLM_PER_CATEGORY]
+    picked = tech + fin
+    picked = _dedupe_and_sort(picked)
+
+    if not picked:
+        return "过去 24 小时内未抓取到资讯，无法生成汇总。"
+
+    material = _render_articles_for_llm(picked)
+    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    system = (
+        "你是一名中文信息分析助手。请基于用户提供的“文章材料清单”生成摘要汇总。\n"
+        "硬性要求：\n"
+        "1) 输出必须为中文 Markdown。\n"
+        "2) 结构必须包含：\n"
+        "   - ## 科技要点（3-8条）\n"
+        "   - ## 财经要点（3-8条）\n"
+        "   - ## 今日投资理财建议（非投资建议）（3-6条）\n"
+        "3) 每一条“科技要点/财经要点”都必须在末尾用“出处：”列出 1-3 个来源，格式必须是可点击的 Markdown 链接，例如：出处：[A01](https://...) [A12](https://...)\n"
+        "4) “今日投资理财建议”必须基于财经要点提炼，给出板块/主题层面的关注点与风险提示；\n"
+        "   - 可以用不确定表达（如“可能/或许/需关注风险”）讨论哪些板块偏强/偏弱的条件与触发因素；\n"
+        "   - 禁止推荐具体个股、禁止承诺收益、禁止使用确定性措辞（如“必涨/必跌”）；\n"
+        "   - 每条建议也要给出处链接（同样用 Axx）。\n"
+        "5) 内容要尽量精炼，整体控制在约 2500-5000 中文字符以内。\n"
+    )
+
+    user = (
+        f"当前时间（UTC）：{now_utc}\n"
+        f"请根据以下过去 {HOURS_WINDOW} 小时文章材料进行汇总。材料格式为：编号 | 分类 | 来源 | 时间 | 标题 | 链接\n\n"
+        f"{material}"
+    )
+
+    url = f"{base_url}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "temperature": 0.2,
+        "max_tokens": 1400,
+        "stream": False,
+    }
+
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=40)
+        resp.raise_for_status()
+        data = resp.json()
+        content = data["choices"][0]["message"]["content"]
+        return content.strip()
+    except Exception as e:
+        print(f"[WARN] DeepSeek 汇总失败，将回退为原始列表：{e}", file=sys.stderr)
+        return None
 
 
 def send_to_serverchan(title: str, desp: str) -> None:
@@ -229,22 +378,26 @@ def send_to_serverchan(title: str, desp: str) -> None:
 
 
 def main() -> None:
-    print("Collecting tech news from RSS feeds...")
-    news_items = collect_news()
+    print("Collecting tech & finance news from RSS feeds...")
+    news_items = collect_all_news()
     print(f"Collected {len(news_items)} items within last {HOURS_WINDOW} hours.")
 
-    desp = build_markdown(news_items)
-
-    if news_items:
-        first_time = news_items[0]["published_at"].astimezone(timezone.utc)
-        first_time_str = first_time.strftime("%Y-%m-%d %H:%M UTC")
-        title = f"科技资讯日报（最近 {HOURS_WINDOW} 小时，最新 {first_time_str}）"
+    llm_summary = summarize_with_deepseek(news_items)
+    if llm_summary:
+        desp = llm_summary
+        title = f"科技&财经汇总（最近 {HOURS_WINDOW} 小时）"
     else:
-        title = f"科技资讯日报（最近 {HOURS_WINDOW} 小时无更新）"
+        desp = build_raw_markdown(news_items)
+        title = f"科技&财经列表（最近 {HOURS_WINDOW} 小时）"
 
     # 避免标题过长
     if len(title) > 60:
         title = title[:57] + "..."
+
+    # Server酱对内容长度有限制（不同版本/通道略有差异），这里做一个保守截断
+    max_len = 28000
+    if len(desp) > max_len:
+        desp = desp[: (max_len - 40)].rstrip() + "\n\n（内容过长已截断）"
 
     print("Sending to ServerChan...")
     send_to_serverchan(title, desp)
