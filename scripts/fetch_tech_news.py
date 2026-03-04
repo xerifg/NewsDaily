@@ -5,6 +5,7 @@ from email.utils import parsedate_to_datetime
 from typing import List, Dict, Optional
 import xml.etree.ElementTree as ET
 import re
+import time
 
 import requests
 
@@ -332,15 +333,32 @@ def summarize_with_deepseek(news_items: List[Dict]) -> Optional[str]:
         "stream": False,
     }
 
-    try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=40)
-        resp.raise_for_status()
-        data = resp.json()
-        content = data["choices"][0]["message"]["content"]
-        return content.strip()
-    except Exception as e:
-        print(f"[WARN] DeepSeek 汇总失败，将回退为原始列表：{e}", file=sys.stderr)
-        return None
+    # 简单重试机制，尽量减少偶发网络抖动导致直接回退为原始列表的情况
+    max_retries = 2
+    last_err: Optional[Exception] = None
+
+    for attempt in range(1, max_retries + 2):  # 共尝试 1 + max_retries 次
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()
+            content = data["choices"][0]["message"]["content"]
+            return content.strip()
+        except Exception as e:
+            last_err = e
+            # 在 GitHub Actions 中给出更详细的尝试次数信息，便于排查
+            print(
+                f"[WARN] 第 {attempt} 次调用 DeepSeek 失败：{e}",
+                file=sys.stderr,
+            )
+            if attempt <= max_retries:
+                time.sleep(3)
+
+    print(
+        f"[WARN] DeepSeek 汇总多次失败，将回退为原始列表：{last_err}",
+        file=sys.stderr,
+    )
+    return None
 
 
 def send_to_serverchan(title: str, desp: str) -> None:
