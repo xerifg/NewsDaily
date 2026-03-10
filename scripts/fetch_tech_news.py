@@ -50,7 +50,7 @@ MAX_ITEMS_PER_SOURCE = 15
 MAX_TOTAL_ITEMS = 40
 
 # 交给大模型总结时，每个类别最多提供多少篇（避免 prompt 过长）
-MAX_ITEMS_FOR_LLM_PER_CATEGORY = 25
+MAX_ITEMS_FOR_LLM_PER_CATEGORY = 12
 
 
 def parse_rss_datetime(date_str: str) -> Optional[datetime]:
@@ -437,10 +437,13 @@ def main() -> None:
     if len(title) > 60:
         title = title[:57] + "..."
 
-    # Server酱对内容长度有限制（不同版本/通道略有差异），这里做一个保守截断
-    max_len = 28000
+    # Server酱对内容长度有限制（不同版本/通道略有差异），这里做一个更保守的截断
+    max_len = 15000
     if len(desp) > max_len:
-        desp = desp[: (max_len - 40)].rstrip() + "\n\n（内容过长已截断）"
+        desp = (
+            desp[: (max_len - 80)].rstrip()
+            + "\n\n（内容过长已截断，下半部分未发送，如需完整内容请调整脚本分段推送。）"
+        )
 
     print("Sending to ServerChan...")
     send_to_serverchan(title, desp)
