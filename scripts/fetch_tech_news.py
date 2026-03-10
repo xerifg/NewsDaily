@@ -12,16 +12,32 @@ import requests
 
 # 一些科技新闻 RSS/Atom 源，你可以按需增删
 TECH_FEEDS = {
-    "Hacker News – Frontpage": "https://hnrss.org/frontpage",
+    # 英文源：科技创业 / 消费科技 / 深度技术 / 科技文化
+    "TechCrunch – Startups & VC": "https://techcrunch.com/feed/",
     "The Verge – Tech": "https://www.theverge.com/rss/index.xml",
-    "TechCrunch": "https://techcrunch.com/feed/",
+    "Ars Technica – All": "https://feeds.arstechnica.com/arstechnica/index",
+    "WIRED – Main": "https://www.wired.com/feed/rss",
+    # 中文源：综合科技与创新报道
+    "36氪（第三方全文）": "https://feedx.net/rss/36kr.xml",
+    "虎嗅网（第三方全文）": "https://feedx.net/rss/huxiu.xml",
+    "极客公园": "https://www.geekpark.net/rss",
+    "爱范儿 ifanr": "https://www.ifanr.com/feed",
 }
 
 # 一些财经新闻 RSS 源（尽量选择公开可访问的）
 FINANCE_FEEDS = {
-    "Yahoo Finance – Top Stories": "https://finance.yahoo.com/rss/topstories",
-    "CNBC – Top News": "https://www.cnbc.com/id/100003114/device/rss/rss.html",
-    "MarketWatch – Top Stories": "https://feeds.content.dowjones.io/public/rss/mw_topstories",
+    # 英文源：全球金融市场与宏观
+    "Bloomberg – Markets（第三方聚合）": "https://newsloth.com/feed/bloomberg-markets",
+    "Reuters – Business News": "http://feeds.reuters.com/reuters/businessNews",
+    "Financial Times – Home": "https://www.ft.com/rss/home",
+    "CNBC – Top News & Analysis": "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+    "The Economist – Finance & Economics": "https://www.economist.com/finance-and-economics/rss.xml",
+    # 中文源：深度财经与市场快讯
+    "财新网（第三方全文）": "https://feedx.net/rss/caixin.xml",
+    "第一财经（RSSHub）": "https://rsshub.app/cbnweekly",
+    "华尔街见闻": "https://dedicated.wallstreetcn.com/rss.xml",
+    "东方财富": "https://finance.eastmoney.com/rss/yaowen.xml",
+    "雪球（示例用户动态，按需替换）": "https://rsshub.app/xueqiu/user/1955602780",
 }
 
 # 过去多少小时的资讯
@@ -289,30 +305,31 @@ def summarize_with_deepseek(news_items: List[Dict]) -> Optional[str]:
 
     system = (
         "你是一名金融机构的宏观及多资产研究员，日常工作包括跟踪科技与宏观财经资讯，"
-        "并为内部投研/资产配置讨论提供结构化的信息摘要和风险提示。\n"
+        "并为内部投研/资产配置讨论提供结构化的信息摘要和风险提示。所有输出仅为公开资讯的整理与风险提示，"
+        "不构成任何投资、理财或证券买卖建议，你必须避免提供具体操作性投资建议。\n"
         "【输出格式硬性要求，必须严格遵守】：\n"
         "1) 输出必须为中文 Markdown。\n"
         "2) 结构必须严格包含且仅包含以下三个一级标题，顺序也必须一致：\n"
         "   - ## 科技要点\n"
         "   - ## 财经要点\n"
-        "   - ## 今日投资理财建议（非投资建议）\n"
+        "   - ## 今日宏观与资产配置风险提示（不构成投资建议）\n"
         "3) 每个一级标题下必须有 3–8 条有编号的要点（使用“1. 2. 3.”这种 Markdown 列表编号），任何一级标题下都不允许为空。\n"
         "4) 每一条“科技要点/财经要点”都必须在末尾用“出处：”列出 1–3 个来源，"
         "   且必须使用 Axx 编号+Markdown 链接的形式，例如：出处：[A01](https://...) [A12](https://...)。\n"
-        "5) “今日投资理财建议（非投资建议）”必须基于【财经要点】提炼，给出板块/主题层面的关注点与风险提示：\n"
+        "5) “今日宏观与资产配置风险提示（不构成投资建议）”必须基于【财经要点】提炼，给出板块/主题层面的风险提示与关注要点：\n"
         "   - 只能讨论行业、板块、资产类别或宏观主题，禁止提及具体个股或单一债券；\n"
         "   - 可以用不确定表达（如“可能/或许/需关注风险”）讨论哪些板块偏强/偏弱的条件与触发因素；\n"
-        "   - 禁止推荐具体标的、禁止承诺收益、禁止使用确定性措辞（如“必涨/必跌”）。\n"
-        "   - 每条建议也必须在末尾给出出处链接（同样用 Axx 编号+Markdown 链接）。\n"
-        "6) 即使你认为材料较少或不够直接指向投资，也必须在“今日投资理财建议（非投资建议）”中给出以“风险提示/需关注点”为主的 3–6 条建议，"
-        "可以偏保守、偏宏观，但绝对不能省略这一部分。\n"
+        "   - 禁止给出任何具体投资操作建议（如买入/卖出/加仓/减仓）、禁止承诺收益、禁止使用确定性措辞（如“必涨/必跌”）。\n"
+        "   - 每条风险提示也必须在末尾给出出处链接（同样用 Axx 编号+Markdown 链接）。\n"
+        "6) 即使你认为材料较少或不够直接指向投资，也必须在“今日宏观与资产配置风险提示（不构成投资建议）”中给出以“风险提示/需关注点”为主的 3–6 条内容，"
+        "可以偏保守、偏宏观，但绝对不能省略这一部分，也不能只写“暂无”或“无法给出”等敷衍性内容。\n"
         "7) 内容要尽量精炼，整体控制在约 2500–5000 中文字符以内。\n"
     )
 
     user = (
         f"当前时间（UTC）：{now_utc}\n"
         f"请根据以下过去 {HOURS_WINDOW} 小时文章材料进行汇总。材料格式为：编号 | 分类 | 来源 | 时间 | 标题 | 链接。\n"
-        f"务必检查：输出中一定要依次出现“## 科技要点”“## 财经要点”“## 今日投资理财建议（非投资建议）”三个一级标题，"
+        f"务必检查：输出中一定要依次出现“## 科技要点”“## 财经要点”“## 今日宏观与资产配置风险提示（不构成投资建议）”三个一级标题，"
         f"且每个标题下都要有 3–8 条编号要点，否则视为不符合要求。\n\n"
         f"{material}"
     )
