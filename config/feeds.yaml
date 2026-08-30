@@ -1,0 +1,224 @@
+# ============================================================
+# 数据源与过滤配置
+# 增删源、调整关键词/限额直接改本文件即可，无需改代码。
+# ============================================================
+
+# 垂直源：内容本身聚焦对应领域，条目直接归入 category
+# 可选字段 max_items：该源单独限量（默认取 limits.max_items_per_source）
+vertical_feeds:
+  # --- AI ---
+  - name: The Decoder
+    url: https://the-decoder.com/feed/
+    category: AI
+  - name: VentureBeat – AI
+    url: https://venturebeat.com/category/ai/feed/
+    category: AI
+  - name: Ars Technica – AI
+    url: https://arstechnica.com/ai/feed/
+    category: AI
+  - name: MIT Tech Review
+    url: https://www.technologyreview.com/feed/
+    category: AI
+  # --- 自动驾驶 ---
+  - name: Electrek – Autonomy
+    url: https://electrek.co/guides/autonomous-driving/feed/
+    category: 自动驾驶
+  - name: IEEE Spectrum – Transportation
+    url: https://spectrum.ieee.org/feeds/topic/transportation.rss
+    category: 自动驾驶
+  - name: Google News – AD
+    url: https://news.google.com/rss/search?q=autonomous+driving+OR+robotaxi+OR+self-driving&hl=en-US&gl=US&ceid=US:en
+    category: 自动驾驶
+    max_items: 10
+  # --- 机器人 ---
+  - name: IEEE Spectrum – Robotics
+    url: https://spectrum.ieee.org/feeds/topic/robotics.rss
+    category: 机器人
+  - name: Google News – Robotics
+    url: https://news.google.com/rss/search?q=humanoid+robot+OR+robotics&hl=en-US&gl=US&ceid=US:en
+    category: 机器人
+    max_items: 10
+  # --- Reddit 社区（公开 RSS；限流较严，抓取失败会自动跳过）---
+  - name: Reddit – r/MachineLearning
+    url: https://www.reddit.com/r/MachineLearning/.rss
+    category: AI
+    max_items: 8
+  - name: Reddit – r/selfdrivingcars
+    url: https://www.reddit.com/r/selfdrivingcars/.rss
+    category: 自动驾驶
+    max_items: 5
+  - name: Reddit – r/robotics
+    url: https://www.reddit.com/r/robotics/.rss
+    category: 机器人
+    max_items: 5
+
+# 综合源：按 keyword_groups 粗筛并自动归类，未命中任何关键词组的条目丢弃
+generic_feeds:
+  - name: 量子位
+    url: https://www.qbitai.com/feed
+  - name: 雷锋网
+    url: https://www.leiphone.com/feed/
+  # 新智元/机器之心/AIBase 无官方 RSS，用 Google News site: 查询覆盖
+  - name: 新智元/机器之心/AIBase
+    url: "https://news.google.com/rss/search?q=site:xinzhiyuan.ai+OR+site:jiqizhixin.com+OR+site:aibase.com+when:2d&hl=zh-CN&gl=CN&ceid=CN:zh-Hans"
+    max_items: 12
+  - name: Hacker News
+    url: https://hnrss.org/newest?q=AI+OR+LLM+OR+%22autonomous+driving%22+OR+robotaxi+OR+robotics+OR+humanoid
+
+# 关键词分组：综合源条目按命中顺序归类（先判断更垂直的领域）
+keyword_groups:
+  - category: 自动驾驶
+    keywords:
+      - autonomous driving
+      - autonomous vehicle
+      - autonomous car
+      - self-driving
+      - selfdriving
+      - robotaxi
+      - robo-taxi
+      - fsd
+      - waymo
+      - lidar
+      - adas
+      - zoox
+      - level 4
+      - level 3
+      - 自动驾驶
+      - 智能驾驶
+      - 智驾
+      - 辅助驾驶
+      - 无人驾驶
+      - 萝卜快跑
+      - 端到端
+      - 世界模型
+  - category: 机器人
+    keywords:
+      - robot
+      - humanoid
+      - embodied
+      - manipulation
+      - vlm
+      - vla
+      - 机器人
+      - 人形机器人
+      - 具身
+      - 机械臂
+  - category: AI
+    keywords:
+      - ai
+      - a.i.
+      - artificial intelligence
+      - llm
+      - gpt
+      - claude
+      - gemini
+      - deepseek
+      - openai
+      - anthropic
+      - transformer
+      - diffusion
+      - foundation model
+      - agent
+      - multimodal
+      - 大模型
+      - 人工智能
+      - 智能体
+      - 多模态
+      - 算力
+
+# arXiv 分类 RSS（按公告日更新，工作日每天一次；周末不更新属正常）
+arxiv_feeds:
+  - name: arXiv – cs.RO
+    url: http://export.arxiv.org/rss/cs.RO
+  - name: arXiv – cs.CV
+    url: http://export.arxiv.org/rss/cs.CV
+
+# 论文关键词：标题/摘要命中即保留（cs.CV 量大，靠这个收敛）
+paper_keywords:
+  - driving
+  - autonomous
+  - robotaxi
+  - end-to-end
+  - vision-language-action
+  - vla
+  - world model
+  - embodied
+  - slam
+  - lidar
+  - occupancy
+  - bev
+  - trajectory
+  - planning
+  - navigation
+  - manipulation
+  - humanoid
+  - imitation learning
+  - diffusion policy
+  - reinforcement learning
+  - sim-to-real
+  - sim2real
+  - pedestrian
+  - parking
+  - odometry
+  - 3d reconstruction
+  - scene understanding
+  - sensor fusion
+
+# 关注的开源仓库：新 Release 视为对应类别动态
+github_repos:
+  - repo: commaai/openpilot
+    category: 自动驾驶
+  - repo: autowarefoundation/autoware
+    category: 自动驾驶
+  - repo: carla-simulator/carla
+    category: 自动驾驶
+  - repo: NVIDIA-Omniverse/IsaacSim
+    category: 自动驾驶
+  - repo: huggingface/lerobot
+    category: 机器人
+
+# HuggingFace Daily Papers：社区热榜论文（公开 API，无需鉴权）
+# 该接口返回滚动热榜（近几日最高赞），不按时间窗过滤，直接取 Top N
+huggingface_papers:
+  enabled: true
+  max_items: 8
+  # 按上方 paper_keywords 过滤，聚焦自动驾驶/机器人方向；
+  # 设为 false 则不过滤（全领域热榜论文）
+  filter_by_keywords: true
+
+# GitHub Trending：每日热榜仓库（HTML 解析）
+# 独立成“开源项目”板块，默认不过滤关键词，直接取当日前 N 名最火仓库
+github_trending:
+  enabled: true
+  max_items: 10
+  # 是否按关键词过滤后再取前 N 名；默认 false = 不过滤（看全量最火仓库）
+  filter_by_keywords: false
+  # 仓库全名/描述命中任一关键词才保留（小写匹配），仅当 filter_by_keywords 为 true 时生效
+  keywords:
+    - llm
+    - agent
+    - autonomous
+    - driving
+    - robot
+    - robotics
+    - vision
+    - vla
+    - diffusion
+    - embodied
+    - world model
+    - inference
+
+# ============================================================
+# 数量与窗口控制
+# ============================================================
+limits:
+  # 过去多少小时的资讯
+  hours_window: 24
+  # 每个源最多取多少条
+  max_items_per_source: 15
+  # 每个类别最多保留多少条
+  max_items_per_category: 30
+  # 交给大模型总结时，每个类别最多提供多少篇（避免 prompt 过长）
+  max_items_for_llm_per_category: 15
+  # 标题相似度阈值：超过则认为是同一新闻（跨源去重）
+  title_similarity_threshold: 0.82
