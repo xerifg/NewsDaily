@@ -1,61 +1,177 @@
 # ============================================================
 # 数据源与过滤配置
 # 增删源、调整关键词/限额直接改本文件即可，无需改代码。
+# 本文件为实际生效的运行时配置；人工整理的完整订阅源清单
+#（含每类源的订阅方式/RSSHub 说明）见 config/sources.yaml。
 # ============================================================
 
 # 垂直源：内容本身聚焦对应领域，条目直接归入 category
+# kind 字段：新闻资讯 / 技术方案（板块内子组区分；综合源不配，用 kind_groups 关键词自动归类）
 # 可选字段 max_items：该源单独限量（默认取 limits.max_items_per_source）
 vertical_feeds:
-  # --- AI ---
+  # --- AI · 新闻资讯 ---
   - name: The Decoder
     url: https://the-decoder.com/feed/
     category: AI
+    kind: 新闻资讯
   - name: VentureBeat – AI
     url: https://venturebeat.com/category/ai/feed/
     category: AI
+    kind: 新闻资讯
   - name: Ars Technica – AI
     url: https://arstechnica.com/ai/feed/
     category: AI
+    kind: 新闻资讯
   - name: MIT Tech Review
     url: https://www.technologyreview.com/feed/
     category: AI
-  # --- 自动驾驶 ---
+    kind: 新闻资讯
+  - name: The Rundown AI
+    url: https://www.therundown.ai/feed
+    category: AI
+    kind: 新闻资讯
+    max_items: 8
+  - name: TechCrunch AI
+    url: https://techcrunch.com/category/artificial-intelligence/feed/
+    category: AI
+    kind: 新闻资讯
+    max_items: 8
+  - name: Wired AI
+    url: https://www.wired.com/feed/tag/ai/latest/rss
+    category: AI
+    kind: 新闻资讯
+    max_items: 8
+  - name: Google AI Blog
+    url: https://blog.google/technology/ai/rss/
+    category: AI
+    kind: 新闻资讯
+    max_items: 5
+  - name: OpenAI News
+    url: https://openai.com/news/rss.xml
+    category: AI
+    kind: 新闻资讯
+    max_items: 5
+  - name: NVIDIA Blog
+    url: https://blogs.nvidia.com/feed/
+    category: AI
+    kind: 新闻资讯
+    max_items: 5
+  # --- AI · 技术方案/深度 ---
+  - name: Import AI
+    url: https://importai.substack.com/feed
+    category: AI
+    kind: 技术方案
+    max_items: 5
+  - name: The Gradient
+    url: https://thegradientpub.substack.com/feed
+    category: AI
+    kind: 技术方案
+    max_items: 5
+  - name: Ahead of AI
+    url: https://magazine.sebastianraschka.com/feed
+    category: AI
+    kind: 技术方案
+    max_items: 5
+  - name: Interconnects
+    url: https://www.interconnects.ai/feed
+    category: AI
+    kind: 技术方案
+    max_items: 5
+  - name: Lil'Log
+    url: https://lilianweng.github.io/index.xml
+    category: AI
+    kind: 技术方案
+    max_items: 5
+  - name: Simon Willison
+    url: https://simonwillison.net/atom/everything/
+    category: AI
+    kind: 技术方案
+    max_items: 5
+  - name: Hugging Face Blog
+    url: https://huggingface.co/blog/feed.xml
+    category: AI
+    kind: 技术方案
+    max_items: 8
+  # --- 自动驾驶 · 新闻资讯 ---
   - name: Electrek – Autonomy
     url: https://electrek.co/guides/autonomous-driving/feed/
     category: 自动驾驶
+    kind: 新闻资讯
   - name: IEEE Spectrum – Transportation
     url: https://spectrum.ieee.org/feeds/topic/transportation.rss
     category: 自动驾驶
+    kind: 新闻资讯
   - name: Google News – AD
     url: https://news.google.com/rss/search?q=autonomous+driving+OR+robotaxi+OR+self-driving&hl=en-US&gl=US&ceid=US:en
     category: 自动驾驶
+    kind: 新闻资讯
     max_items: 10
-  # --- 机器人 ---
+  - name: Autonomous Vehicle International
+    url: https://www.autonomousvehicleinternational.com/feed
+    category: 自动驾驶
+    kind: 新闻资讯
+    max_items: 8
+  # --- 自动驾驶 · 技术方案 ---
+  - name: Waymo Blog
+    url: https://waymo.com/blog/rss.xml
+    category: 自动驾驶
+    kind: 技术方案
+    max_items: 5
+  - name: comma.ai Blog
+    url: https://blog.comma.ai/feed.xml
+    category: 自动驾驶
+    kind: 技术方案
+    max_items: 5
+  # --- 机器人 · 新闻资讯 ---
   - name: IEEE Spectrum – Robotics
     url: https://spectrum.ieee.org/feeds/topic/robotics.rss
     category: 机器人
+    kind: 新闻资讯
   - name: Google News – Robotics
     url: https://news.google.com/rss/search?q=humanoid+robot+OR+robotics&hl=en-US&gl=US&ceid=US:en
     category: 机器人
+    kind: 新闻资讯
     max_items: 10
+  - name: The Robot Report
+    url: https://www.therobotreport.com/feed
+    category: 机器人
+    kind: 新闻资讯
+    max_items: 10
+  - name: Robohub
+    url: https://robohub.org/feed
+    category: 机器人
+    kind: 新闻资讯
+    max_items: 8
+  # --- 机器人 · 技术方案 ---
+  - name: NVIDIA Robotics Blog
+    url: https://blogs.nvidia.com/blog/category/robotics/feed/
+    category: 机器人
+    kind: 技术方案
+    max_items: 5
   # --- Reddit 社区（公开 RSS；限流较严，抓取失败会自动跳过）---
   - name: Reddit – r/MachineLearning
     url: https://www.reddit.com/r/MachineLearning/.rss
     category: AI
+    kind: 新闻资讯
     max_items: 8
   - name: Reddit – r/selfdrivingcars
     url: https://www.reddit.com/r/selfdrivingcars/.rss
     category: 自动驾驶
+    kind: 新闻资讯
     max_items: 5
   - name: Reddit – r/robotics
     url: https://www.reddit.com/r/robotics/.rss
     category: 机器人
+    kind: 新闻资讯
     max_items: 5
 
 # 综合源：按 keyword_groups 粗筛并自动归类，未命中任何关键词组的条目丢弃
 generic_feeds:
   - name: 量子位
     url: https://www.qbitai.com/feed
+  - name: Pandaily（中国科技/EV/机器人）
+    url: https://pandaily.com/feed/
+    max_items: 10
   - name: 雷锋网
     url: https://www.leiphone.com/feed/
   # 新智元/机器之心/AIBase 无官方 RSS，用 Google News site: 查询覆盖
@@ -64,6 +180,16 @@ generic_feeds:
     max_items: 12
   - name: Hacker News
     url: https://hnrss.org/newest?q=AI+OR+LLM+OR+%22autonomous+driving%22+OR+robotaxi+OR+robotics+OR+humanoid
+  # 英文综合科技/汽车源，靠关键词归类收敛（sources.yaml 追加）
+  - name: The Verge
+    url: https://www.theverge.com/rss/index.xml
+    max_items: 10
+  - name: CleanTechnica
+    url: https://cleantechnica.com/feed/
+    max_items: 8
+  - name: The Drive
+    url: https://www.thedrive.com/rss
+    max_items: 8
 
 # 关键词分组：综合源条目按命中顺序归类（先判断更垂直的领域）
 keyword_groups:
@@ -126,12 +252,79 @@ keyword_groups:
       - 多模态
       - 算力
 
-# arXiv 分类 RSS（按公告日更新，工作日每天一次；周末不更新属正常）
+# 内容类型关键词：给综合源（generic_feeds）条目区分“新闻资讯 / 技术方案”
+# 命中技术方案关键词 → 技术方案；否则默认 新闻资讯（综合源多为新闻）
+kind_groups:
+  - kind: 技术方案
+    keywords:
+      - model
+      - algorithm
+      - architecture
+      - training
+      - fine-tuning
+      - finetuning
+      - inference
+      - backbone
+      - transformer
+      - attention
+      - diffusion
+      - rlhf
+      - reasoning
+      - benchmark
+      - evaluation
+      - dataset
+      - pretraining
+      - pre-training
+      - parameter
+      - quantization
+      - distillation
+      - multimodal
+      - multi-modal
+      - world model
+      - end-to-end
+      - vla
+      - imitation learning
+      - manipulation
+      - slam
+      - occupancy
+      - bev
+      - trajectory
+      - planning
+      - navigation
+      - control
+      - sim-to-real
+      - sim2real
+      - reinforcement learning
+      - policy gradient
+      - 模型
+      - 算法
+      - 架构
+      - 训练
+      - 推理
+      - 微调
+      - 基准
+      - 数据集
+      - 参数
+      - 量化
+      - 蒸馏
+      - 多模态
+      - 世界模型
+      - 端到端
+      - 具身
+      - 强化学习
+      - 控制
+      - 规划
+      - 导航
+
+# arXiv 分类 RSS（2024-01 起官方迁移至 rss.arxiv.org；按公告日更新，
+# 工作日每天一次，周五晚~周末无新公告属正常）
 arxiv_feeds:
   - name: arXiv – cs.RO
-    url: http://export.arxiv.org/rss/cs.RO
+    url: https://rss.arxiv.org/rss/cs.RO
   - name: arXiv – cs.CV
-    url: http://export.arxiv.org/rss/cs.CV
+    url: https://rss.arxiv.org/rss/cs.CV
+  - name: arXiv – cs.AI
+    url: https://rss.arxiv.org/rss/cs.AI
 
 # 论文关键词：标题/摘要命中即保留（cs.CV 量大，靠这个收敛）
 paper_keywords:
@@ -174,6 +367,8 @@ github_repos:
     category: 自动驾驶
   - repo: NVIDIA-Omniverse/IsaacSim
     category: 自动驾驶
+  - repo: NVIDIA/Isaac-GR00T
+    category: 机器人
   - repo: huggingface/lerobot
     category: 机器人
 

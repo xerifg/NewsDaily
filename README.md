@@ -16,14 +16,17 @@
 - **🔥 开源项目**：GitHub Trending 当日最火 Top 10 仓库（按今日新增 star 降序），不按领域过滤
 - **📄 论文速递**：arXiv cs.RO / cs.CV 每日公告（按论文关键词过滤）+ HuggingFace Daily Papers 社区热榜
 
+**板块内子组**：AI / 自动驾驶 / 机器人三个板块内部再按 **📰 新闻资讯** 与 **🧠 算法技术方案** 分组——
+垂直源在配置里直接标注 `kind`（新闻媒体=新闻资讯，技术博客/官方技术博客=技术方案），综合源按 `kind_groups` 关键词自动归类（命中技术方案关键词→技术方案，否则默认新闻资讯）。
+
 另外：监控关键开源仓库（openpilot、autoware、CARLA、Isaac Sim、lerobot）的新 Release；通过 Google News `site:` 查询覆盖新智元、机器之心、AIBase 等无官方 RSS 的中文 AI 媒体。
 
 ### 处理流程
 
 ```
 垂直 RSS 源（The Decoder / VentureBeat / Ars Technica / MIT TR / Electrek /
-IEEE Spectrum / Google News / Reddit 社区）─┐
-综合源（量子位 / 雷锋网 / 新智元·机器之心·AIBase / Hacker News）─┤→ 跨源标题相似度去重 → 按类别限量 → DeepSeek 分板块汇总
+IEEE Spectrum / Google News / Reddit 社区，配置标注 kind）─┐
+综合源（量子位 / 雷锋网 / 新智元·机器之心·AIBase / Hacker News / The Verge 等，kind_groups 关键词归类）─┤→ 跨源标题相似度去重 → 按类别限量 → DeepSeek 分板块·分类型汇总
 arXiv 分类 RSS + HuggingFace Daily Papers（论文关键词过滤）─┤        （未配置 LLM 时回退为原始列表）
 GitHub Releases（关键仓库新 Release）─┘                        ↓
 GitHub Trending（当日 Top 10 开源项目，独立板块）─────────────────────────────────→ 归档/推送
@@ -46,13 +49,15 @@ GitHub Trending（当日 Top 10 开源项目，独立板块）──────
 - **DEEPSEEK_BASE_URL**：默认 `https://api.deepseek.com`
 - **PUSH_CHANNELS**：推送渠道，逗号分隔，默认 `serverchan`
 - **SITE_URL**：日报站点地址，默认 `https://xerifg.github.io/NewsDaily`
+- **PUSH_MAX_BYTES**：推送正文字节上限，默认 `1000`（微信服务号模板消息约 1KB 会截断；走企业微信等长内容通道可调大）
 
 ### 推送策略：日报内容摘要 + 全文链接
 
 为绕开微信推送的长度限制，LLM 一次生成"全文 + 摘要版"两部分（以 `<<<DIGEST>>>` 分隔），且两部分都以 **📋 日报内容摘要**（AI 概括的 3-4 条当日核心要点导读）开头：
 
 - **归档**：全文写入 `docs/YYYY-MM-DD.md`，开头即日报内容摘要，随后是五个板块的完整内容
-- **推送**：只发摘要版（日报内容摘要 + AI/自动驾驶/机器人/论文每板块最多 3 条一句话概括，开源项目板块最多 10 条仓库全名，约 800 字）+ "查看完整日报"链接（指向 GitHub Pages 上的当日全文）
+- **推送**：发摘要版（日报内容摘要 + AI/自动驾驶/机器人/论文每板块最多 3 条一句话概括，开源项目板块最多 10 条仓库全名）+ "查看完整日报"链接（指向 GitHub Pages 上的当日全文）
+- **微信端长度保护**：微信服务号模板消息对正文有约 1KB 的截断限制，脚本会按字节数自动控制推送内容——摘要版超出安全上限（默认 1000 字节）时降级为「日报内容摘要 + 链接」，保证微信端永远完整显示、链接不被截断。想推送完整板块要点，可配置 Server酱 企业微信等长内容通道，并调大环境变量 `PUSH_MAX_BYTES`
 - 若 LLM 的摘要版漏掉了摘要块，脚本会自动从全文提取补到推送内容最前面
 
 回退行为：LLM 未配置/失败时推送原始列表（超长截断并附全文链接）；LLM 输出中缺摘要部分时推送全文。
@@ -84,9 +89,9 @@ python scripts/fetch_tech_news.py --config path/to/feeds.yaml  # 指定其他配
 
 所有数据源与限额都在 `config/feeds.yaml`：
 
-- 增删 RSS 源：`vertical_feeds`（垂直源，条目直接归类）/ `generic_feeds`（综合源，关键词归类）
+- 增删 RSS 源：`vertical_feeds`（垂直源，条目直接归类，可加 `kind: 新闻资讯/技术方案`）/ `generic_feeds`（综合源，关键词归类 + `kind_groups` 自动区分类型）
 - 单个源的条数上限：给对应源加 `max_items` 字段；全局默认在 `limits.max_items_per_source`
-- 调整关键词归类：`keyword_groups`
+- 调整关键词归类：`keyword_groups`；调整新闻/技术类型归类：`kind_groups`
 - 调整论文过滤：`paper_keywords`；HuggingFace 热榜开关与条数：`huggingface_papers`
 - 关注其他开源仓库：`github_repos`；GitHub Trending 开关/条数/是否关键词过滤：`github_trending`（默认 `filter_by_keywords: false`，即直接看当日最火 Top 10）
 - 时间窗口与各类限额：`limits`

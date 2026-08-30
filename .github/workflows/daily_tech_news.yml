@@ -44,6 +44,8 @@ jobs:
           PUSH_CHANNELS: ${{ vars.PUSH_CHANNELS }}
           # 可选：日报站点地址（GitHub Pages），推送摘要中的“查看完整日报”链接
           SITE_URL: ${{ vars.SITE_URL }}
+          # 可选：推送正文字节上限，默认 1000（微信模板消息约 1KB；走企业微信等长内容通道可调大）
+          PUSH_MAX_BYTES: ${{ vars.PUSH_MAX_BYTES }}
         run: |
           python scripts/fetch_tech_news.py
 

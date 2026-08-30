@@ -75,6 +75,12 @@ KEYWORD_GROUPS: List[tuple] = [
     (g["category"], g["keywords"]) for g in _config.get("keyword_groups", [])
 ]
 
+# 内容类型分组：综合源条目区分“新闻资讯 / 技术方案”
+# 命中技术方案关键词 → 技术方案；否则默认 新闻资讯
+KIND_GROUPS: List[tuple] = [
+    (g["kind"], g["keywords"]) for g in _config.get("kind_groups", [])
+]
+
 # 关注的开源仓库：repo -> 类别
 GITHUB_REPOS: Dict[str, str] = {
     r["repo"]: r["category"] for r in _config.get("github_repos", [])
@@ -177,6 +183,15 @@ def _classify_by_keywords(title: str, summary: str) -> Optional[str]:
     return None
 
 
+def _classify_kind(title: str, summary: str) -> str:
+    """为综合源条目区分内容类型：命中技术方案关键词 → 技术方案，否则默认 新闻资讯。"""
+    text = f"{title} {summary}".lower()
+    for kind, keywords in KIND_GROUPS:
+        if kind == "技术方案" and any(kw in text for kw in keywords):
+            return "技术方案"
+    return "新闻资讯"
+
+
 def fetch_feed(
     url: str,
     source_name: str,
@@ -184,6 +199,7 @@ def fetch_feed(
     keyword_classify: bool = False,
     paper_filter: bool = False,
     max_items: Optional[int] = None,
+    kind: Optional[str] = None,
     hours: int = HOURS_WINDOW,
 ) -> List[Dict]:
     """
@@ -193,6 +209,7 @@ def fetch_feed(
     - keyword_classify=True：按关键词分组自动归类，未命中的条目丢弃（综合源）
     - paper_filter=True：按论文关键词过滤（arXiv 源）
     - max_items：该源单独限量（默认 MAX_ITEMS_PER_SOURCE）
+    - kind：内容类型（新闻资讯 / 技术方案）；为 None 时综合源用 _classify_kind 自动判定
     """
     print(f"Fetching feed: {source_name} ({url})")
     try:
@@ -250,10 +267,12 @@ def fetch_feed(
         summary = _clean_html(item.findtext("description") or "")
 
         item_category = category
+        item_kind = kind
         if keyword_classify:
             item_category = _classify_by_keywords(title, summary)
             if item_category is None:
                 continue
+            item_kind = _classify_kind(title, summary)
         if paper_filter:
             text = f"{title} {summary}".lower()
             if not any(kw in text for kw in PAPER_KEYWORDS):
@@ -266,6 +285,7 @@ def fetch_feed(
                 "published_at": pub_dt,
                 "source": source_name,
                 "category": item_category,
+                "kind": item_kind,
                 "summary": summary,
             }
         )
@@ -291,10 +311,12 @@ def fetch_feed(
         summary = _clean_html(entry.findtext("{*}summary") or "")
 
         item_category = category
+        item_kind = kind
         if keyword_classify:
             item_category = _classify_by_keywords(title, summary)
             if item_category is None:
                 continue
+            item_kind = _classify_kind(title, summary)
         if paper_filter:
             text = f"{title} {summary}".lower()
             if not any(kw in text for kw in PAPER_KEYWORDS):
@@ -307,6 +329,7 @@ def fetch_feed(
                 "published_at": pub_dt,
                 "source": source_name,
                 "category": item_category,
+                "kind": item_kind,
                 "summary": summary,
             }
         )
@@ -358,6 +381,7 @@ def fetch_github_releases() -> List[Dict]:
                     "published_at": pub_dt,
                     "source": "GitHub Releases",
                     "category": category,
+                    "kind": "新闻资讯",
                     "summary": _clean_html(rel.get("body") or ""),
                 }
             )
@@ -557,6 +581,7 @@ def collect_all_news() -> List[Dict]:
                 feed["name"],
                 category=feed.get("category"),
                 max_items=feed.get("max_items"),
+                kind=feed.get("kind"),
             )
         )
 
@@ -610,17 +635,45 @@ def build_raw_markdown(news_items: List[Dict]) -> str:
             continue
         lines.append(f"## {CATEGORY_EMOJI.get(category, category)}")
         lines.append("")
-        for idx, item in enumerate(cat_items, start=1):
-            pub_str = item["published_at"].astimezone(timezone.utc).strftime(
-                "%Y-%m-%d %H:%M UTC"
-            )
-            lines.append(
-                f"{idx}. **{item['title']}**  \n"
-                f"   来源：{item['source']}  \n"
-                f"   时间：{pub_str}  \n"
-                f"   链接：{item['link']}"
-            )
-        lines.append("")
+
+        # 板块内按内容类型分组：新闻资讯 / 技术方案（论文/开源项目板块不分）
+        kind_order = ["新闻资讯", "技术方案"]
+        kind_labels = {
+            "新闻资讯": "📰 新闻资讯",
+            "技术方案": "🧠 算法技术方案",
+        }
+        grouped = False
+        for k in kind_order:
+            sub = [x for x in cat_items if (x.get("kind") or "") == k]
+            if not sub:
+                continue
+            grouped = True
+            lines.append(f"**{kind_labels[k]}**")
+            lines.append("")
+            for idx, item in enumerate(sub, start=1):
+                pub_str = item["published_at"].astimezone(timezone.utc).strftime(
+                    "%Y-%m-%d %H:%M UTC"
+                )
+                lines.append(
+                    f"{idx}. **{item['title']}**  \n"
+                    f"   来源：{item['source']}  \n"
+                    f"   时间：{pub_str}  \n"
+                    f"   链接：{item['link']}"
+                )
+            lines.append("")
+        if not grouped:
+            # 兜底：条目无 kind 时平铺输出
+            for idx, item in enumerate(cat_items, start=1):
+                pub_str = item["published_at"].astimezone(timezone.utc).strftime(
+                    "%Y-%m-%d %H:%M UTC"
+                )
+                lines.append(
+                    f"{idx}. **{item['title']}**  \n"
+                    f"   来源：{item['source']}  \n"
+                    f"   时间：{pub_str}  \n"
+                    f"   链接：{item['link']}"
+                )
+            lines.append("")
 
     return "\n".join(lines)
 
@@ -636,7 +689,8 @@ def _render_articles_for_llm(news_items: List[Dict]) -> str:
         pub_str = item["published_at"].astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         summary = (item.get("summary") or "")[:200]
         lines.append(
-            f"{aid} | {item.get('category','未知')} | {item.get('source','')} | {pub_str} | "
+            f"{aid} | {item.get('category','未知')} | {item.get('kind') or '-'} | "
+            f"{item.get('source','')} | {pub_str} | "
             f"{item.get('title','').strip()} | {summary} | {item.get('link','').strip()}"
         )
     return "\n".join(lines)
@@ -687,9 +741,14 @@ def summarize_with_deepseek(news_items: List[Dict]) -> Optional[str]:
         "   - **🦾 机器人与具身智能**\n"
         "   - **🔥 开源项目**\n"
         "   - **📄 论文速递**\n"
-        "5) 每个板块标题下允许先写 1 段不带序号的“导语/总括”（可选，1–2 句），导语之后必须开始编号列表。\n"
-        "6) 每个板块下必须有 3–8 条编号要点（使用 Markdown 编号列表“1. 2. 3.”）；"
-        "若该板块当天确实没有材料，则只写一行“今日无重要动态。”，不得编造内容。\n"
+        "5) 每个板块标题下允许先写 1 段不带序号的“导语/总括”（可选，1–2 句），导语之后必须开始子组输出。\n"
+        "6) **🤖 AI 大模型** / **🚗 自动驾驶** / **🦾 机器人与具身智能** 三个板块内必须按以下两个子组组织内容"
+        "（子组标题用加粗，顺序固定）：\n"
+        "   - **📰 新闻资讯**：行业动态、产品/模型发布、融资、合作、政策法规等\n"
+        "   - **🧠 算法技术方案**：模型/算法/架构、训练推理、工程实践、技术解析、论文技术解读等\n"
+        "   每个子组下用独立编号列表（各自从 1 开始，使用 Markdown 编号“1. 2. 3.”）；"
+        "子组无材料则省略该子组；整个板块无任何材料时只写一行“今日无重要动态。”，不得编造内容。\n"
+        "   **🔥 开源项目** 与 **📄 论文速递** 板块不分子组。\n"
         "7) 每条要点必须严格由两行组成（顺序固定）：\n"
         "   - 第 1 行：编号 + 加粗标题（例如：1. **端到端方案新进展：xxx**）\n"
         "   - 第 2 行：摘要（1–2 句中文），必须换行呈现，不要与标题同一行。\n"
@@ -704,16 +763,17 @@ def summarize_with_deepseek(news_items: List[Dict]) -> Optional[str]:
         "12) 全文控制在约 1800–4000 中文字符以内，避免超长。\n"
         "13) 全文结束后，另起一行输出分隔标记 <<<DIGEST>>>（该标记必须单独占一行，标记前不留空行），"
         "随后输出“摘要版”：摘要版第一块必须同样是 **📋 日报内容摘要**（同样 3–4 条要点），"
-        "之后每个板块最多 3 条、每条一行，格式为“**标题**：一句话概括”，"
+        "之后每个板块最多 4 条、每条一行，每条以 “📰”（新闻资讯）或 “🧠”（算法技术方案）开头区分两类"
+        "（格式：📰 **标题**：一句话概括）；"
         "但 **🔥 开源项目** 板块例外：最多输出 10 条、每条一行直接列仓库全名（格式 **owner/repo**）即可；"
-        "摘要版不写导语、不写编号、无材料的板块省略；摘要版总长不超过 800 字符，"
+        "摘要版不写导语、不写编号、无材料的板块省略；摘要版总长不超过 500 字符（微信推送超限时脚本会自动降级为“日报内容摘要+链接”），"
         "同样不得包含链接、URL 或 Axx 编号。\n"
     )
 
     user = (
         f"当前时间（UTC）：{now_utc}\n"
         f"日报日期：{report_date}\n"
-        f"请根据以下过去 {HOURS_WINDOW} 小时文章材料生成技术日报。材料格式为：编号 | 分类 | 来源 | 时间 | 标题 | 摘要 | 链接。\n"
+        f"请根据以下过去 {HOURS_WINDOW} 小时文章材料生成技术日报。材料格式为：编号 | 分类 | 类型(新闻资讯/技术方案/-) | 来源 | 时间 | 标题 | 摘要 | 链接。\n"
         f"强约束：第一行日期必须使用 {report_date}；最终输出中不要出现任何链接、URL、或 Axx 编号。\n\n"
         f"{material}"
     )
@@ -805,6 +865,48 @@ def _extract_daily_summary(report: str) -> Optional[str]:
 # 日报站点地址（GitHub Pages）：推送摘要里的“查看完整日报”链接指向这里。
 # 可用环境变量 SITE_URL 覆盖（未开启 Pages 时可改为仓库地址等）。
 SITE_URL = (os.environ.get("SITE_URL") or "https://xerifg.github.io/NewsDaily").rstrip("/")
+
+# 推送正文的字节安全上限（UTF-8）。
+# 微信服务号模板消息的 desp 约 1KB，超限微信端会把正文截断（实测截断点约 1000 字节）。
+# 走 Server酱 企业微信等长内容通道时，可配置环境变量 PUSH_MAX_BYTES 调大。
+MAX_PUSH_BYTES = int(os.environ.get("PUSH_MAX_BYTES") or "1000")
+
+
+def _build_push_desp(digest: Optional[str], report: str, full_url: str) -> str:
+    """
+    组装推送内容，保证末尾“查看完整日报”链接完整、且不触发微信端截断：
+    1) 正常路径：摘要版（以日报内容摘要开头）+ 链接；字节数在安全范围内直接推送。
+    2) 超限降级：只推“日报内容摘要 + 链接”。
+    3) 极端情况：摘要块也超限时按字节截断，链接始终完整保留。
+    """
+    suffix = f"\n\n📖 [查看完整日报]({full_url})"
+
+    if digest:
+        # 摘要版必须以“日报内容摘要”开头；LLM 漏输出时从全文提取补上
+        if "📋 日报内容摘要" not in digest:
+            summary_block = _extract_daily_summary(report)
+            if summary_block:
+                digest = f"{summary_block}\n\n{digest}"
+        content = digest
+        fallback = _extract_daily_summary(report) or digest
+    else:
+        content = report
+        fallback = report
+
+    if len((content + suffix).encode("utf-8")) <= MAX_PUSH_BYTES:
+        return content + suffix
+
+    # 超限：降级为“日报内容摘要 + 链接”
+    if len((fallback + suffix).encode("utf-8")) <= MAX_PUSH_BYTES:
+        return fallback + suffix
+
+    # 仍超限：按字节截断，末尾链接保持完整
+    # 预算要留足省略号(3字节)与 UTF-8 截断边界余量，保证结果不超上限
+    budget = MAX_PUSH_BYTES - len(suffix.encode("utf-8")) - 12
+    truncated = (
+        fallback.encode("utf-8")[:budget].decode("utf-8", errors="ignore").rstrip()
+    )
+    return truncated + "…" + suffix
 
 
 def archive_report(report_date: str, title: str, desp: str) -> Path:
@@ -957,24 +1059,10 @@ def main() -> None:
     else:
         archive_report(report_date, title, report)
 
-    # 推送内容：有摘要版则只推“日报内容摘要 + 板块要点 + 全文链接”，绕开渠道长度限制；
-    # 否则回退为全文（超长时截断并附全文链接）
+    # 推送内容：摘要版超长时自动降级为“日报内容摘要 + 全文链接”，绕开微信端截断；
+    # 无摘要版则回退为全文（同样受字节上限保护，链接始终完整）
     full_url = f"{SITE_URL}/{report_date}.html"
-    if digest:
-        # 摘要版必须以“日报内容摘要”开头；LLM 漏输出时从全文提取补上
-        if "📋 日报内容摘要" not in digest:
-            summary_block = _extract_daily_summary(report)
-            if summary_block:
-                digest = f"{summary_block}\n\n{digest}"
-        desp_for_push = f"{digest}\n\n---\n\n📖 [查看完整日报]({full_url})"
-    else:
-        desp_for_push = report
-        max_len = 15000
-        if len(desp_for_push) > max_len:
-            desp_for_push = (
-                desp_for_push[: (max_len - 120)].rstrip()
-                + f"\n\n（内容过长已截断，[查看完整日报]({full_url})。）"
-            )
+    desp_for_push = _build_push_desp(digest, report, full_url)
 
     if dry_run:
         print("\n===== DRY RUN: archive content =====")

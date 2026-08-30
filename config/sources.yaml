@@ -1,0 +1,433 @@
+# ============================================================
+# 订阅源总表（2026-08-30 调研整理）
+# ------------------------------------------------------------
+# 本文件是人工整理的"推荐源清单"（含订阅方式说明），用于参考/审计。
+# ⚠️ 实际运行生效的配置在 config/feeds.yaml —— 抓取脚本只读 feeds.yaml。
+#     需要真正启用某个源时，把它按对应结构追加到 feeds.yaml 即可。
+#
+# type 字段说明（决定"能不能直接 RSS 订阅"）：
+#   rss        有官方 RSS/Atom，可直接订阅、直接进抓取脚本
+#   rsshub     无官方 RSS，需通过 RSSHub（rsshub.app 公共实例或自建）转出
+#   wechat     微信公众号，无官方 RSS；需 RSSHub /wechat 路由（要公众号 cookie，
+#              公共实例不稳定，建议自建或改用 Google News site: 查询覆盖）
+#   newsletter 邮件订阅制（多数 substack 同时提供 /feed，可直接 RSS）
+#   arxiv      arXiv 分类 RSS（rss.arxiv.org，周末不更新属正常）
+#   api        公开 API / 网页，由脚本内置逻辑处理
+#   github     GitHub 仓库（Releases / Trending）
+#
+# domain 字段：AI | 自动驾驶 | 机器人 | 论文 | 开源项目 | 综合
+# kind   字段：新闻资讯 | 技术方案 | 论文 | 社区
+# ============================================================
+
+sources:
+  # ==================== AI · 新闻资讯 ====================
+  - name: 机器之心
+    domain: AI
+    kind: 新闻资讯
+    type: rss
+    url: https://www.jiqizhixin.com/rss
+    notes: 国内 AI 媒体头部，学术+产业，官方 RSS 可用
+  - name: 量子位
+    domain: AI
+    kind: 新闻资讯
+    type: rss
+    url: https://www.qbitai.com/feed
+    notes: 官方 feed 基本可用，偶尔不稳；备用走 RSSHub https://rsshub.app/qbitai
+  - name: 新智元
+    domain: AI
+    kind: 新闻资讯
+    type: wechat
+    url: https://news.google.com/rss/search?q=site:xinzhiyuan.ai+when:2d
+    notes: "无官方 RSS，现有配置用 Google News site: 查询覆盖（sogou 微信源更易被封）"
+  - name: AI 科技评论（雷锋网）
+    domain: AI
+    kind: 新闻资讯
+    type: rss
+    url: https://www.leiphone.com/feed/
+    notes: AI 学术+产业报道，官方 RSS 可用
+  - name: 智东西
+    domain: AI
+    kind: 新闻资讯
+    type: wechat
+    url: ""
+    notes: AI 硬件/终端产品，公众号订阅
+  - name: 甲子光年
+    domain: AI
+    kind: 新闻资讯
+    type: wechat
+    url: ""
+    notes: AI 商业化/投融资深度拆解，公众号订阅
+  - name: The Rundown AI
+    domain: AI
+    kind: 新闻资讯
+    type: rss
+    url: https://www.therundown.ai/feed
+    notes: 全球最大独立 AI 每日简报，工作日更新，已验证
+  - name: Import AI
+    domain: AI
+    kind: 新闻资讯
+    type: rss
+    url: https://importai.substack.com/feed
+    notes: Anthropic 联合创始人 Jack Clark 周报，深度+政策，已验证
+  - name: TLDR AI
+    domain: AI
+    kind: 新闻资讯
+    type: newsletter
+    url: https://tldr.tech/ai
+    notes: 工程师向每日简报，邮件订阅（无官方 RSS）
+  - name: MIT Tech Review
+    domain: AI
+    kind: 新闻资讯
+    type: rss
+    url: https://www.technologyreview.com/feed/
+    notes: The Algorithm 周报同源
+  - name: TechCrunch AI
+    domain: AI
+    kind: 新闻资讯
+    type: rss
+    url: https://techcrunch.com/category/artificial-intelligence/feed/
+    notes: 初创融资+产品新闻，量大需过滤
+  - name: The Verge AI
+    domain: AI
+    kind: 新闻资讯
+    type: rss
+    url: https://www.theverge.com/rss/index.xml
+    notes: 消费级 AI 报道，用关键词归类过滤
+  - name: Pandaily
+    domain: 综合
+    kind: 新闻资讯
+    type: rss
+    url: https://pandaily.com/feed/
+    notes: 中国科技/AI/EV/机器人英文资讯，混合源，已验证
+  - name: Wired AI
+    domain: AI
+    kind: 新闻资讯
+    type: rss
+    url: https://www.wired.com/feed/tag/ai/latest/rss
+    notes: 长文深度报道，偏"AI 对社会的影响"
+
+  # ==================== AI · 技术方案 ====================
+  - name: The Gradient
+    domain: AI
+    kind: 技术方案
+    type: rss
+    url: https://thegradientpub.substack.com/feed
+    notes: AI 前沿深度长文
+  - name: Ahead of AI（Sebastian Raschka）
+    domain: AI
+    kind: 技术方案
+    type: rss
+    url: https://magazine.sebastianraschka.com/feed
+    notes: LLM 论文技术拆解
+  - name: Interconnects（Nathan Lambert）
+    domain: AI
+    kind: 技术方案
+    type: rss
+    url: https://www.interconnects.ai/feed
+    notes: post-training / 开源权重生态
+  - name: Lil'Log（Lilian Weng）
+    domain: AI
+    kind: 技术方案
+    type: rss
+    url: https://lilianweng.github.io/index.xml
+    notes: 个人高质量综述，必读
+  - name: BAIR Blog
+    domain: AI
+    kind: 技术方案
+    type: rss
+    url: https://bair.berkeley.edu/blog/feed.xml
+    notes: 伯克利 AI 实验室
+  - name: Simon Willison
+    domain: AI
+    kind: 技术方案
+    type: rss
+    url: https://simonwillison.net/atom/everything/
+    notes: LLM 应用/工具实战
+  - name: Hugging Face Blog
+    domain: AI
+    kind: 技术方案
+    type: rss
+    url: https://huggingface.co/blog/feed.xml
+    notes: 开源模型/部署，工程向
+  - name: Google AI Blog
+    domain: AI
+    kind: 技术方案
+    type: rss
+    url: https://blog.google/technology/ai/rss/
+    notes: 官方模型/基建公告
+  - name: OpenAI News
+    domain: AI
+    kind: 技术方案
+    type: rss
+    url: https://openai.com/news/rss.xml
+    notes: 官方发布
+  - name: NVIDIA Blog
+    domain: AI
+    kind: 技术方案
+    type: rss
+    url: https://blogs.nvidia.com/feed/
+    notes: 物理 AI/芯片/加速计算
+  - name: PaperWeekly
+    domain: AI
+    kind: 论文
+    type: rsshub
+    url: https://rsshub.app/zhihu/zhuanlan/paperweekly
+    notes: 中文论文解读社区；走 RSSHub 知乎专栏路由（公开内容无需登录）
+  - name: 夕小瑶科技说
+    domain: AI
+    kind: 技术方案
+    type: wechat
+    url: ""
+    notes: NLP/LLM 技术解读，公众号订阅
+
+  # ==================== 自动驾驶 · 新闻资讯 ====================
+  - name: Electrek
+    domain: 自动驾驶
+    kind: 新闻资讯
+    type: rss
+    url: https://electrek.co/guides/autonomous-driving/feed/
+    notes: Tesla FSD/robotaxi 量产进度，现有配置已用
+  - name: CleanTechnica
+    domain: 自动驾驶
+    kind: 新闻资讯
+    type: rss
+    url: https://cleantechnica.com/feed/
+    notes: 清洁能源+自动驾驶，量大需过滤
+  - name: The Drive
+    domain: 自动驾驶
+    kind: 新闻资讯
+    type: rss
+    url: https://www.thedrive.com/rss
+    notes: 汽车科技综合
+  - name: Autonomous Vehicle International
+    domain: 自动驾驶
+    kind: 新闻资讯
+    type: rss
+    url: https://www.autonomousvehicleinternational.com/feed
+    notes: 全球自动驾驶部署/法规/案例
+  - name: 智驾最前沿
+    domain: 自动驾驶
+    kind: 新闻资讯
+    type: wechat
+    url: ""
+    notes: 智驾技术+资讯全媒体，公众号订阅
+  - name: 自动驾驶技术网
+    domain: 自动驾驶
+    kind: 新闻资讯
+    type: wechat
+    url: ""
+    notes: 前 Apollo/小马工程师团队，产业链+政策，公众号订阅
+  - name: 正言智驾 / 智驾新纪元
+    domain: 自动驾驶
+    kind: 新闻资讯
+    type: wechat
+    url: ""
+    notes: 深度长文拆解技术路线，公众号订阅
+
+  # ==================== 自动驾驶 · 技术方案 ====================
+  - name: 自动驾驶之心
+    domain: 自动驾驶
+    kind: 技术方案
+    type: wechat
+    url: https://github.com/autodriving-heart/CVPR-2024-Papers-Autonomous-Driving
+    notes: 国内最大自动驾驶开发者社区；公众号/CSDN(CV_Autobot)/GitHub 顶会论文仓库
+  - name: 自动驾驶Daily
+    domain: 自动驾驶
+    kind: 技术方案
+    type: wechat
+    url: ""
+    notes: 每日技术热点+行业资讯，公众号订阅
+  - name: 3D视觉工坊 / 3DCV
+    domain: 自动驾驶
+    kind: 技术方案
+    type: wechat
+    url: ""
+    notes: BEV/Occ/3D检测/SLAM 方案解读，公众号订阅
+  - name: 深蓝AI / 深蓝学院
+    domain: 自动驾驶
+    kind: 技术方案
+    type: wechat
+    url: ""
+    notes: 端到端实践课程+工程师视角技术文章，公众号订阅
+  - name: Waymo Blog
+    domain: 自动驾驶
+    kind: 技术方案
+    type: rss
+    url: https://waymo.com/blog/
+    notes: 官方安全研究/系统架构
+  - name: Mobileye Blog
+    domain: 自动驾驶
+    kind: 技术方案
+    type: rss
+    url: https://www.mobileye.com/blog/
+    notes: 官方 ADAS/自动驾驶技术
+  - name: comma.ai Blog
+    domain: 自动驾驶
+    kind: 技术方案
+    type: rss
+    url: https://blog.comma.ai/
+    notes: 开源智驾 openpilot，端到端一线实践
+
+  # ==================== 机器人/具身智能 · 新闻资讯 ====================
+  - name: The Robot Report
+    domain: 机器人
+    kind: 新闻资讯
+    type: rss
+    url: https://www.therobotreport.com/feed
+    notes: 国际机器人头部媒体，工业/人形/投资，已验证
+  - name: Robohub
+    domain: 机器人
+    kind: 新闻资讯
+    type: rss
+    url: https://robohub.org/feed
+    notes: 非营利机器人社区，研究+创业+教育，已验证
+  - name: Robotics & Automation News
+    domain: 机器人
+    kind: 新闻资讯
+    type: rss
+    url: https://roboticsandautomationnews.com/feed/
+    notes: 产业机器人新闻，量大偏泛，可按需取舍
+  - name: IEEE Spectrum – Robotics
+    domain: 机器人
+    kind: 新闻资讯
+    type: rss
+    url: https://spectrum.ieee.org/feeds/topic/robotics.rss
+    notes: 权威技术媒体，现有配置已用
+  - name: MIT News – Robotics
+    domain: 机器人
+    kind: 新闻资讯
+    type: rss
+    url: https://news.mit.edu/rss/topic/robotics
+    notes: 高校科研动态
+  - name: Boston Dynamics Blog
+    domain: 机器人
+    kind: 新闻资讯
+    type: rss
+    url: https://bostondynamics.com/blog/
+    notes: 头部公司动向
+  - name: NVIDIA Robotics Blog
+    domain: 机器人
+    kind: 新闻资讯
+    type: rss
+    url: https://blogs.nvidia.com/blog/category/robotics/
+    notes: 物理 AI/Isaac/GR00T
+  - name: 机器人大讲堂
+    domain: 机器人
+    kind: 新闻资讯
+    type: wechat
+    url: https://news.qq.com/omn/author/18432938
+    notes: 中国机器人政策/融资/产业园，日更；腾讯新闻号可网页抓取
+  - name: 36氪 – 机器人
+    domain: 机器人
+    kind: 新闻资讯
+    type: rsshub
+    url: https://rsshub.app/36kr/search/article/机器人
+    notes: 中国机器人创业/融资；走 RSSHub 36氪路由
+
+  # ==================== 机器人/具身智能 · 技术方案 ====================
+  - name: 具身智能之心
+    domain: 机器人
+    kind: 技术方案
+    type: wechat
+    url: ""
+    notes: 国内首个具身全栈社区，VLA/VLN/sim2real 论文精解+直播，公众号/知识星球/B站
+  - name: 石麻日记
+    domain: 机器人
+    kind: 技术方案
+    type: wechat
+    url: ""
+    notes: 具身智能超高质量个人号（Embodied-AI-Guide 强推），公众号订阅
+  - name: Lumina 具身智能
+    domain: 机器人
+    kind: 技术方案
+    type: wechat
+    url: ""
+    notes: 具身智能社区/知识库，公众号订阅
+  - name: Xbot具身知识库
+    domain: 机器人
+    kind: 技术方案
+    type: wechat
+    url: ""
+    notes: 具身知识沉淀，公众号订阅
+  - name: 具身智能研究室
+    domain: 机器人
+    kind: 技术方案
+    type: wechat
+    url: ""
+    notes: RL/多智能体/运动控制/VLA，公众号订阅
+  - name: Hugging Face LeRobot
+    domain: 机器人
+    kind: 技术方案
+    type: github
+    url: https://github.com/huggingface/lerobot
+    notes: 开源机器人学习框架，Release/Blog 跟进
+  - name: arXiv cs.RO
+    domain: 论文
+    kind: 论文
+    type: arxiv
+    url: https://rss.arxiv.org/rss/cs.RO
+    notes: 机器人论文主阵地
+  - name: Embodied-AI-Guide（具身智能技术指南）
+    domain: 机器人
+    kind: 技术方案
+    type: github
+    url: https://github.com/TianxingChen/Embodied-AI-Guide
+    notes: 港大/北大等共建，含完整公众号清单
+
+  # ==================== 论文 / 研究 ====================
+  - name: arXiv cs.CV
+    domain: 论文
+    kind: 论文
+    type: arxiv
+    url: https://rss.arxiv.org/rss/cs.CV
+    notes: 计算机视觉（含自动驾驶感知）；量大，需论文关键词过滤
+  - name: arXiv cs.AI
+    domain: 论文
+    kind: 论文
+    type: arxiv
+    url: https://rss.arxiv.org/rss/cs.AI
+    notes: AI 综合，周末不更新
+  - name: arXiv cs.LG / cs.CL
+    domain: 论文
+    kind: 论文
+    type: arxiv
+    url: https://rss.arxiv.org/rss/cs.LG
+    notes: 机器学习 / NLP；量大，建议只保留关键词命中
+  - name: Hugging Face Daily Papers
+    domain: 论文
+    kind: 论文
+    type: api
+    url: https://huggingface.co/api/daily_papers
+    notes: 社区热榜论文；脚本已内置（huggingface_papers）
+  - name: Papers with Code（HF 热门论文页）
+    domain: 论文
+    kind: 论文
+    type: api
+    url: https://huggingface.co/papers
+    notes: 论文+代码+榜单验证，已并入 HF
+
+  # ==================== 开源项目 / 工具 ====================
+  - name: GitHub Trending
+    domain: 开源项目
+    kind: 社区
+    type: api
+    url: https://github.com/trending?since=daily
+    notes: 每日热榜仓库；脚本已内置（github_trending）
+  - name: 关注仓库 Releases
+    domain: 开源项目
+    kind: 社区
+    type: api
+    url: https://api.github.com/repos/{repo}/releases
+    notes: 脚本已内置（github_repos）；新增仓库如 NVIDIA/Isaac-GR00T
+  - name: awesome_ML_AI_RSS_feed
+    domain: 综合
+    kind: 社区
+    type: github
+    url: https://github.com/vishalshar/awesome_ML_AI_RSS_feed
+    notes: ML/AI RSS 大合集，含 feed.opml 可批量导入，注意最后更新较早
+  - name: RSSHub
+    domain: 综合
+    kind: 工具
+    type: api
+    url: https://rsshub.app
+    notes: 万能订阅工具，用于微信/知乎/微博等无 RSS 源；建议自建，公共实例有限流
