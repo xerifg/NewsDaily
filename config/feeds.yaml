@@ -150,17 +150,17 @@ vertical_feeds:
     max_items: 5
   # --- Reddit 社区（公开 RSS；限流较严，抓取失败会自动跳过）---
   - name: Reddit – r/MachineLearning
-    url: https://www.reddit.com/r/MachineLearning/.rss
+    url: https://old.reddit.com/r/MachineLearning/.rss
     category: AI
     kind: 新闻资讯
     max_items: 8
   - name: Reddit – r/selfdrivingcars
-    url: https://www.reddit.com/r/selfdrivingcars/.rss
+    url: https://old.reddit.com/r/selfdrivingcars/.rss
     category: 自动驾驶
     kind: 新闻资讯
     max_items: 5
   - name: Reddit – r/robotics
-    url: https://www.reddit.com/r/robotics/.rss
+    url: https://old.reddit.com/r/robotics/.rss
     category: 机器人
     kind: 新闻资讯
     max_items: 5

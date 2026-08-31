@@ -20,6 +20,14 @@ HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
     )
 }
+FEED_REQUEST_HEADERS = {
+    **HEADERS,
+    "Accept": "application/rss+xml, application/xml, text/xml, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+}
+# Reddit 要求可识别的 UA，且连续请求易 429
+REDDIT_UA = "NewsDaily/1.0 (RSS aggregator; +https://github.com/xerifg/NewsDaily)"
+_last_reddit_fetch_monotonic = 0.0
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DOCS_DIR = ROOT_DIR / "docs"
@@ -192,6 +200,58 @@ def _classify_kind(title: str, summary: str) -> str:
     return "新闻资讯"
 
 
+def _fetch_url_text(url: str, source_name: str) -> Optional[str]:
+    """抓取 RSS/Atom 原始文本，对 429/超时做有限重试。"""
+    global _last_reddit_fetch_monotonic
+
+    headers = dict(FEED_REQUEST_HEADERS)
+    timeout = 45 if "hnrss.org" in url else 30
+    if "substack.com" in url:
+        headers["Referer"] = url.rsplit("/feed", 1)[0] + "/"
+    if "reddit.com" in url:
+        headers["User-Agent"] = REDDIT_UA
+        elapsed = time.monotonic() - _last_reddit_fetch_monotonic
+        if elapsed < 3.0:
+            time.sleep(3.0 - elapsed)
+
+    max_attempts = 3
+    last_err: Optional[Exception] = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            if "reddit.com" in url:
+                _last_reddit_fetch_monotonic = time.monotonic()
+            resp = requests.get(url, headers=headers, timeout=timeout)
+            if resp.status_code == 429:
+                wait = min(2 ** attempt, 10)
+                print(
+                    f"[WARN] {source_name} 429 Too Many Requests，{wait}s 后重试 "
+                    f"({attempt}/{max_attempts})",
+                    file=sys.stderr,
+                )
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            return resp.text
+        except Exception as e:
+            last_err = e
+            if attempt < max_attempts:
+                wait = 2 * attempt
+                print(
+                    f"[WARN] {source_name} 抓取失败，{wait}s 后重试 "
+                    f"({attempt}/{max_attempts})：{e}",
+                    file=sys.stderr,
+                )
+                time.sleep(wait)
+                continue
+            print(f"[WARN] Failed to fetch {source_name}: {e}", file=sys.stderr)
+            return None
+
+    if last_err is not None:
+        print(f"[WARN] Failed to fetch {source_name}: {last_err}", file=sys.stderr)
+    return None
+
+
 def fetch_feed(
     url: str,
     source_name: str,
@@ -212,15 +272,12 @@ def fetch_feed(
     - kind：内容类型（新闻资讯 / 技术方案）；为 None 时综合源用 _classify_kind 自动判定
     """
     print(f"Fetching feed: {source_name} ({url})")
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=20)
-        resp.raise_for_status()
-    except Exception as e:
-        print(f"[WARN] Failed to fetch {source_name}: {e}", file=sys.stderr)
+    text = _fetch_url_text(url, source_name)
+    if text is None:
         return []
 
     try:
-        root = ET.fromstring(_sanitize_xml(resp.text))
+        root = ET.fromstring(_sanitize_xml(text))
     except Exception as e:
         print(f"[WARN] Failed to parse XML for {source_name}: {e}", file=sys.stderr)
         return []
@@ -719,6 +776,89 @@ def _is_llm_output_complete(content: str) -> bool:
     return all(section in report for section in REQUIRED_REPORT_SECTIONS)
 
 
+def _call_deepseek_chat(
+    api_key: str,
+    base_url: str,
+    model: str,
+    messages: List[Dict[str, str]],
+    max_tokens: int,
+    network_retries: int = 2,
+) -> Tuple[Optional[str], str]:
+    """调用 DeepSeek Chat Completions，返回 (content, finish_reason)。"""
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.2,
+        "max_tokens": max_tokens,
+        "stream": False,
+    }
+
+    last_err: Optional[Exception] = None
+    for attempt in range(1, network_retries + 2):
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=120)
+            resp.raise_for_status()
+            data = resp.json()
+            choice = data["choices"][0]
+            content = (choice.get("message") or {}).get("content", "").strip()
+            finish_reason = choice.get("finish_reason") or ""
+            return content, finish_reason
+        except Exception as e:
+            last_err = e
+            print(
+                f"[WARN] 第 {attempt} 次调用 DeepSeek 失败：{e}",
+                file=sys.stderr,
+            )
+            if attempt <= network_retries:
+                time.sleep(3)
+
+    raise RuntimeError(f"DeepSeek API 调用失败：{last_err}")
+
+
+_DIGEST_SYSTEM = (
+    "你是一名技术情报编辑。请根据给出的日报全文，仅输出用于微信推送的“摘要版” Markdown。\n"
+    "要求：\n"
+    "1) 第一块必须是 **📋 日报内容摘要**（3–4 条编号要点，与全文导读一致或精炼复述）。\n"
+    "2) 之后按板块输出（无材料的板块省略）：**🤖 AI 大模型**、**🚗 自动驾驶**、"
+    "**🦾 机器人与具身智能**、**🔥 开源项目**、**📄 论文速递**。\n"
+    "3) 除开源项目外，每条一行，以 📰（新闻资讯）或 🧠（算法技术方案）开头，"
+    "格式：📰 **[标题](链接)**：一句话概括；链接必须原样取自全文。\n"
+    "4) **🔥 开源项目** 最多 10 条，格式：**[owner/repo](GitHub链接)**：一句话简介。\n"
+    "5) 每个板块（开源项目除外）最多 4 条；不写导语、不写编号；总长不超过 700 字符；"
+    "不得编造链接；只输出摘要版正文，不要输出分隔标记或解释。\n"
+)
+
+
+def _generate_digest_with_deepseek(
+    report: str,
+    api_key: str,
+    base_url: str,
+    model: str,
+) -> Optional[str]:
+    """根据日报全文单独生成微信推送用摘要版。"""
+    messages = [
+        {"role": "system", "content": _DIGEST_SYSTEM},
+        {"role": "user", "content": f"日报全文：\n\n{report}"},
+    ]
+    try:
+        digest, finish_reason = _call_deepseek_chat(
+            api_key, base_url, model, messages, max_tokens=1024
+        )
+    except RuntimeError as e:
+        print(f"[WARN] 摘要版生成失败，推送将回退为全文：{e}", file=sys.stderr)
+        return None
+
+    if finish_reason == "length":
+        print("[WARN] 摘要版生成被截断，推送将回退为全文", file=sys.stderr)
+        return None
+    return digest or None
+
+
 def summarize_with_deepseek(news_items: List[Dict]) -> Optional[str]:
     """
     使用 DeepSeek 对过去24小时的 AI/自动驾驶/机器人资讯做分板块汇总。
@@ -790,14 +930,7 @@ def summarize_with_deepseek(news_items: List[Dict]) -> Optional[str]:
         "不得猜测、改写或伪造；不要在正文中出现 Axx 编号。\n"
         "12) 每条摘要尽量精炼（1–2 句），但五个板块与全部链接必须完整输出，"
         "不得因篇幅省略板块或截断链接。\n"
-        "13) 全文结束后，另起一行输出分隔标记 <<<DIGEST>>>（该标记必须单独占一行，标记前不留空行），"
-        "随后输出“摘要版”：摘要版第一块必须同样是 **📋 日报内容摘要**（同样 3–4 条要点），"
-        "之后每个板块最多 4 条、每条一行，每条以 “📰”（新闻资讯）或 “🧠”（算法技术方案）开头区分两类，"
-        "格式：📰 **[标题](链接)**：一句话概括，链接取自材料；"
-        "但 **🔥 开源项目** 板块例外：最多输出 10 条、每条一行，格式为 **[owner/repo](GitHub链接)**：一句话简介；"
-        "摘要版不写导语、不写编号、无材料的板块省略；摘要版总长不超过 700 字符"
-        "（微信推送超限时脚本会自动降级为“日报内容摘要+链接”）；"
-        "不得包含 Axx 编号，不得编造链接。\n"
+        "13) 只输出日报正文，不要输出摘要版，不要输出 <<<DIGEST>>> 分隔标记。\n"
     )
 
     user = (
@@ -808,75 +941,55 @@ def summarize_with_deepseek(news_items: List[Dict]) -> Optional[str]:
         f"{material}"
     )
 
-    url = f"{base_url}/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    # 网络错误重试 + 输出截断时逐步提高 max_tokens 重试
-    max_retries = 2
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user},
+    ]
+
+    # 正文与摘要分两次生成，避免单次输出过长被截断
     max_tokens = DEEPSEEK_MAX_TOKENS
+    report: Optional[str] = None
     last_err: Optional[Exception] = None
 
     while max_tokens <= DEEPSEEK_MAX_TOKENS_CAP:
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "temperature": 0.2,
-            "max_tokens": max_tokens,
-            "stream": False,
-        }
-
-        content: Optional[str] = None
-        finish_reason = ""
-
-        for attempt in range(1, max_retries + 2):
-            try:
-                resp = requests.post(url, headers=headers, json=payload, timeout=120)
-                resp.raise_for_status()
-                data = resp.json()
-                choice = data["choices"][0]
-                content = (choice.get("message") or {}).get("content", "").strip()
-                finish_reason = choice.get("finish_reason") or ""
-                break
-            except Exception as e:
-                last_err = e
-                print(
-                    f"[WARN] 第 {attempt} 次调用 DeepSeek 失败：{e}",
-                    file=sys.stderr,
-                )
-                if attempt <= max_retries:
-                    time.sleep(3)
-
-        if content is None:
+        try:
+            content, finish_reason = _call_deepseek_chat(
+                api_key, base_url, model, messages, max_tokens
+            )
+        except RuntimeError as e:
+            last_err = e
             break
 
         if finish_reason != "length" and _is_llm_output_complete(content):
-            return content
+            report = content
+            break
 
         if max_tokens >= DEEPSEEK_MAX_TOKENS_CAP:
             print(
-                "[WARN] DeepSeek 输出仍不完整（"
+                "[WARN] DeepSeek 日报正文仍不完整（"
                 f"finish_reason={finish_reason!r}），将回退为原始列表",
                 file=sys.stderr,
             )
             return None
 
         print(
-            f"[WARN] DeepSeek 输出不完整（finish_reason={finish_reason!r}），"
+            f"[WARN] DeepSeek 日报正文不完整（finish_reason={finish_reason!r}），"
             f"将 max_tokens 从 {max_tokens} 提高到 {min(max_tokens * 2, DEEPSEEK_MAX_TOKENS_CAP)} 后重试",
             file=sys.stderr,
         )
         max_tokens = min(max_tokens * 2, DEEPSEEK_MAX_TOKENS_CAP)
 
-    print(
-        f"[WARN] DeepSeek 汇总多次失败，将回退为原始列表：{last_err}",
-        file=sys.stderr,
-    )
-    return None
+    if report is None:
+        print(
+            f"[WARN] DeepSeek 汇总多次失败，将回退为原始列表：{last_err}",
+            file=sys.stderr,
+        )
+        return None
+
+    digest = _generate_digest_with_deepseek(report, api_key, base_url, model)
+    if digest:
+        return f"{report}\n{DIGEST_SEPARATOR}\n{digest}"
+    return report
 
 
 # 摘要分隔标记：LLM 输出“全文 <<<DIGEST>>> 摘要版”
