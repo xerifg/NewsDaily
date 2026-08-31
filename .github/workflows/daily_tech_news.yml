@@ -40,7 +40,7 @@ jobs:
           DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
           # 可选：不填则脚本默认 https://api.deepseek.com
           DEEPSEEK_BASE_URL: ${{ vars.DEEPSEEK_BASE_URL }}
-          # 可选：LLM 输出 token 上限，默认 8192（截断时自动翻倍重试，最高 16384）
+          # 可选：日报正文 LLM 输出 token 上限，默认 16384
           DEEPSEEK_MAX_TOKENS: ${{ vars.DEEPSEEK_MAX_TOKENS }}
           # 可选：逗号分隔多个渠道，默认 serverchan
           PUSH_CHANNELS: ${{ vars.PUSH_CHANNELS }}

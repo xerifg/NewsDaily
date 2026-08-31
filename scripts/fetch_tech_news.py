@@ -751,9 +751,9 @@ def _render_articles_for_llm(news_items: List[Dict]) -> str:
     return "\n".join(lines)
 
 
-# LLM 输出 token 上限（可通过环境变量 DEEPSEEK_MAX_TOKENS 覆盖）
-DEEPSEEK_MAX_TOKENS = int(os.environ.get("DEEPSEEK_MAX_TOKENS") or "8192")
-DEEPSEEK_MAX_TOKENS_CAP = 16384
+# 日报正文 LLM 输出 token 上限（可通过环境变量 DEEPSEEK_MAX_TOKENS 覆盖）。
+# 按 2026-08-31 实测：含大量 Google News 长链的五板块正文在 8192 会被截断，16384 可一次生成完整。
+DEEPSEEK_MAX_TOKENS = int(os.environ.get("DEEPSEEK_MAX_TOKENS") or "16384")
 
 # 日报正文必须包含的五个板块标题（用于检测 LLM 是否因 token 上限截断）
 REQUIRED_REPORT_SECTIONS = (
@@ -946,45 +946,24 @@ def summarize_with_deepseek(news_items: List[Dict]) -> Optional[str]:
         {"role": "user", "content": user},
     ]
 
-    # 正文与摘要分两次生成，避免单次输出过长被截断
-    max_tokens = DEEPSEEK_MAX_TOKENS
-    report: Optional[str] = None
-    last_err: Optional[Exception] = None
-
-    while max_tokens <= DEEPSEEK_MAX_TOKENS_CAP:
-        try:
-            content, finish_reason = _call_deepseek_chat(
-                api_key, base_url, model, messages, max_tokens
-            )
-        except RuntimeError as e:
-            last_err = e
-            break
-
-        if finish_reason != "length" and _is_llm_output_complete(content):
-            report = content
-            break
-
-        if max_tokens >= DEEPSEEK_MAX_TOKENS_CAP:
-            print(
-                "[WARN] DeepSeek 日报正文仍不完整（"
-                f"finish_reason={finish_reason!r}），将回退为原始列表",
-                file=sys.stderr,
-            )
-            return None
-
-        print(
-            f"[WARN] DeepSeek 日报正文不完整（finish_reason={finish_reason!r}），"
-            f"将 max_tokens 从 {max_tokens} 提高到 {min(max_tokens * 2, DEEPSEEK_MAX_TOKENS_CAP)} 后重试",
-            file=sys.stderr,
+    # 正文与摘要分两次生成；正文默认 16384 token，一次调用即可覆盖含长链的完整五板块
+    try:
+        content, finish_reason = _call_deepseek_chat(
+            api_key, base_url, model, messages, DEEPSEEK_MAX_TOKENS
         )
-        max_tokens = min(max_tokens * 2, DEEPSEEK_MAX_TOKENS_CAP)
+    except RuntimeError as e:
+        print(f"[WARN] DeepSeek 汇总失败，将回退为原始列表：{e}", file=sys.stderr)
+        return None
 
-    if report is None:
+    if finish_reason == "length" or not _is_llm_output_complete(content):
         print(
-            f"[WARN] DeepSeek 汇总多次失败，将回退为原始列表：{last_err}",
+            "[WARN] DeepSeek 日报正文不完整（"
+            f"finish_reason={finish_reason!r}，max_tokens={DEEPSEEK_MAX_TOKENS}），将回退为原始列表",
             file=sys.stderr,
         )
         return None
+
+    report = content
 
     digest = _generate_digest_with_deepseek(report, api_key, base_url, model)
     if digest:
