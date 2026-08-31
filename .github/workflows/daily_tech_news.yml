@@ -40,8 +40,10 @@ jobs:
           DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
           # 可选：不填则脚本默认 https://api.deepseek.com
           DEEPSEEK_BASE_URL: ${{ vars.DEEPSEEK_BASE_URL }}
-          # 可选：日报正文 LLM 输出 token 上限，默认 16384
+          # 可选：日报正文 LLM 输出 token 上限，默认 12288
           DEEPSEEK_MAX_TOKENS: ${{ vars.DEEPSEEK_MAX_TOKENS }}
+          # 可选：微信摘要版 LLM 输出 token 上限，默认 2048
+          DEEPSEEK_DIGEST_MAX_TOKENS: ${{ vars.DEEPSEEK_DIGEST_MAX_TOKENS }}
           # 可选：逗号分隔多个渠道，默认 serverchan
           PUSH_CHANNELS: ${{ vars.PUSH_CHANNELS }}
           # 可选：日报站点地址（GitHub Pages），推送摘要中的“查看完整日报”链接

@@ -752,8 +752,10 @@ def _render_articles_for_llm(news_items: List[Dict]) -> str:
 
 
 # 日报正文 LLM 输出 token 上限（可通过环境变量 DEEPSEEK_MAX_TOKENS 覆盖）。
-# 按 2026-08-31 实测：含大量 Google News 长链的五板块正文在 8192 会被截断，16384 可一次生成完整。
-DEEPSEEK_MAX_TOKENS = int(os.environ.get("DEEPSEEK_MAX_TOKENS") or "16384")
+# 按 2026-08-31 完整归档实测：五板块正文约 8,260 output token（8192 会截断），12288 留约 48% 余量。
+DEEPSEEK_MAX_TOKENS = int(os.environ.get("DEEPSEEK_MAX_TOKENS") or "12288")
+# 微信摘要版单独生成；按同日报最坏情况（多条 Google News 长链）约 2,100 token，2048 留足余量。
+DEEPSEEK_DIGEST_MAX_TOKENS = int(os.environ.get("DEEPSEEK_DIGEST_MAX_TOKENS") or "2048")
 
 # 日报正文必须包含的五个板块标题（用于检测 LLM 是否因 token 上限截断）
 REQUIRED_REPORT_SECTIONS = (
@@ -847,7 +849,7 @@ def _generate_digest_with_deepseek(
     ]
     try:
         digest, finish_reason = _call_deepseek_chat(
-            api_key, base_url, model, messages, max_tokens=1024
+            api_key, base_url, model, messages, max_tokens=DEEPSEEK_DIGEST_MAX_TOKENS
         )
     except RuntimeError as e:
         print(f"[WARN] 摘要版生成失败，推送将回退为全文：{e}", file=sys.stderr)
@@ -946,7 +948,7 @@ def summarize_with_deepseek(news_items: List[Dict]) -> Optional[str]:
         {"role": "user", "content": user},
     ]
 
-    # 正文与摘要分两次生成；正文默认 16384 token，一次调用即可覆盖含长链的完整五板块
+    # 正文与摘要分两次生成；正文默认 12288 token，摘要默认 2048 token
     try:
         content, finish_reason = _call_deepseek_chat(
             api_key, base_url, model, messages, DEEPSEEK_MAX_TOKENS
