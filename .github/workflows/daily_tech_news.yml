@@ -2,9 +2,9 @@ name: Daily Tech News to WeChat
 
 on:
   schedule:
-    # GitHub Actions 使用 UTC，这里是每天 02:00 UTC = 北京时间 10:00
+    # GitHub Actions 使用 UTC，这里是每天 00:00 UTC = 北京时间 08:00
     # （错开 arXiv 论文公告的刷新时间，保证当天批次能被抓到）
-    - cron: '0 2 * * *'
+    - cron: '0 0 * * *'
   # 手动触发，方便调试
   workflow_dispatch:
 
@@ -40,6 +40,8 @@ jobs:
           DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL }}
           # 可选：不填则脚本默认 https://api.deepseek.com
           DEEPSEEK_BASE_URL: ${{ vars.DEEPSEEK_BASE_URL }}
+          # 可选：LLM 输出 token 上限，默认 8192（截断时自动翻倍重试，最高 16384）
+          DEEPSEEK_MAX_TOKENS: ${{ vars.DEEPSEEK_MAX_TOKENS }}
           # 可选：逗号分隔多个渠道，默认 serverchan
           PUSH_CHANNELS: ${{ vars.PUSH_CHANNELS }}
           # 可选：日报站点地址（GitHub Pages），推送摘要中的“查看完整日报”链接

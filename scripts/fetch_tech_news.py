@@ -655,10 +655,9 @@ def build_raw_markdown(news_items: List[Dict]) -> str:
                     "%Y-%m-%d %H:%M UTC"
                 )
                 lines.append(
-                    f"{idx}. **{item['title']}**  \n"
+                    f"{idx}. **[{item['title']}]({item['link']})**  \n"
                     f"   来源：{item['source']}  \n"
-                    f"   时间：{pub_str}  \n"
-                    f"   链接：{item['link']}"
+                    f"   时间：{pub_str}"
                 )
             lines.append("")
         if not grouped:
@@ -668,10 +667,9 @@ def build_raw_markdown(news_items: List[Dict]) -> str:
                     "%Y-%m-%d %H:%M UTC"
                 )
                 lines.append(
-                    f"{idx}. **{item['title']}**  \n"
+                    f"{idx}. **[{item['title']}]({item['link']})**  \n"
                     f"   来源：{item['source']}  \n"
-                    f"   时间：{pub_str}  \n"
-                    f"   链接：{item['link']}"
+                    f"   时间：{pub_str}"
                 )
             lines.append("")
 
@@ -694,6 +692,31 @@ def _render_articles_for_llm(news_items: List[Dict]) -> str:
             f"{item.get('title','').strip()} | {summary} | {item.get('link','').strip()}"
         )
     return "\n".join(lines)
+
+
+# LLM 输出 token 上限（可通过环境变量 DEEPSEEK_MAX_TOKENS 覆盖）
+DEEPSEEK_MAX_TOKENS = int(os.environ.get("DEEPSEEK_MAX_TOKENS") or "8192")
+DEEPSEEK_MAX_TOKENS_CAP = 16384
+
+# 日报正文必须包含的五个板块标题（用于检测 LLM 是否因 token 上限截断）
+REQUIRED_REPORT_SECTIONS = (
+    "**🤖 AI 大模型**",
+    "**🚗 自动驾驶**",
+    "**🦾 机器人与具身智能**",
+    "**🔥 开源项目**",
+    "**📄 论文速递**",
+)
+
+
+def _is_llm_output_complete(content: str) -> bool:
+    """检测 LLM 日报正文是否完整（五板块齐全、末尾无未闭合链接）。"""
+    report, _, _ = content.partition(DIGEST_SEPARATOR)
+    report = report.strip()
+    if not report:
+        return False
+    if re.search(r"\[[^\]]*\]\([^)\s]*$", report):
+        return False
+    return all(section in report for section in REQUIRED_REPORT_SECTIONS)
 
 
 def summarize_with_deepseek(news_items: List[Dict]) -> Optional[str]:
@@ -749,27 +772,29 @@ def summarize_with_deepseek(news_items: List[Dict]) -> Optional[str]:
         "   每个子组下用独立编号列表（各自从 1 开始，使用 Markdown 编号“1. 2. 3.”）；"
         "子组无材料则省略该子组；整个板块无任何材料时只写一行“今日无重要动态。”，不得编造内容。\n"
         "   **🔥 开源项目** 与 **📄 论文速递** 板块不分子组。\n"
-        "7) 每条要点必须严格由三行组成（顺序固定）：\n"
-        "   - 第 1 行：编号 + 加粗标题（例如：1. **端到端方案新进展：xxx**）\n"
+        "7) 每条要点必须严格由两行组成（顺序固定）：\n"
+        "   - 第 1 行：编号 + 标题超链接，格式为“1. **[标题](链接)**”，"
+        "链接必须原样取自材料行最后一列的链接字段，严禁编造或改写。\n"
         "   - 第 2 行：摘要（1–2 句中文），必须换行呈现，不要与标题同一行。\n"
-        "   - 第 3 行：来源链接，格式为“🔗 [查看原文](链接)”，链接必须原样取自材料行最后一列的链接字段，严禁编造或改写。\n"
         "8) **🚗 自动驾驶** 板块应优先覆盖：端到端/世界模型/VLA 等技术路线进展、量产与 Robotaxi 落地、"
         "政策法规、供应链（芯片/激光雷达）动态。\n"
-        "9) **📄 论文速递** 板块基于材料中 category=论文 的条目，每条要点第 1 行为论文中文译名（可在括号内保留英文原名），"
-        "第 2 行为一句话概括其核心贡献，第 3 行为来源链接（arXiv/HF 论文页，取自材料链接字段）。\n"
+        "9) **📄 论文速递** 板块基于材料中 category=论文 的条目，每条要点两行："
+        "第 1 行为“编号. **[论文中文译名](链接)**”（可在标题中保留英文原名），"
+        "第 2 行为一句话概括其核心贡献（链接取自材料，arXiv/HF 论文页）。\n"
         "10) **🔥 开源项目** 板块基于材料中 category=开源项目 的条目（GitHub Trending 当日最火仓库），"
-        "按热度从高到低最多输出 10 条；每条要点第 1 行为仓库全名（格式：owner/repo，保留英文原名并加粗），"
-        "第 2 行为该仓库的一句话中文简介并结合其 star 涨幅点出其为什么火，"
-        "第 3 行为该仓库的 GitHub 链接（格式：🔗 [GitHub](链接)，取自材料链接字段）。\n"
+        "按热度从高到低最多输出 10 条；每条要点两行："
+        "第 1 行为“编号. **[owner/repo](GitHub链接)**”（仓库全名保留英文原名并加粗为链接文字），"
+        "第 2 行为该仓库的一句话中文简介并结合其 star 涨幅点出其为什么火"
+        "（GitHub 链接取自材料链接字段）。\n"
         "11) 严禁编造链接/URL：正文与摘要版中的所有链接都必须原样取自材料行最后一列的链接字段，"
         "不得猜测、改写或伪造；不要在正文中出现 Axx 编号。\n"
-        "12) 全文控制在约 1800–5000 中文字符以内，避免超长（含链接行）。\n"
+        "12) 每条摘要尽量精炼（1–2 句），但五个板块与全部链接必须完整输出，"
+        "不得因篇幅省略板块或截断链接。\n"
         "13) 全文结束后，另起一行输出分隔标记 <<<DIGEST>>>（该标记必须单独占一行，标记前不留空行），"
         "随后输出“摘要版”：摘要版第一块必须同样是 **📋 日报内容摘要**（同样 3–4 条要点），"
         "之后每个板块最多 4 条、每条一行，每条以 “📰”（新闻资讯）或 “🧠”（算法技术方案）开头区分两类，"
-        "格式：📰 **标题**：一句话概括 [原文](链接)，链接取自材料；"
-        "但 **🔥 开源项目** 板块例外：最多输出 10 条、每条一行直接列仓库全名（格式 **owner/repo**）"
-        "并附 GitHub 链接（格式：[GitHub](链接)）；"
+        "格式：📰 **[标题](链接)**：一句话概括，链接取自材料；"
+        "但 **🔥 开源项目** 板块例外：最多输出 10 条、每条一行，格式为 **[owner/repo](GitHub链接)**：一句话简介；"
         "摘要版不写导语、不写编号、无材料的板块省略；摘要版总长不超过 700 字符"
         "（微信推送超限时脚本会自动降级为“日报内容摘要+链接”）；"
         "不得包含 Axx 编号，不得编造链接。\n"
@@ -788,36 +813,64 @@ def summarize_with_deepseek(news_items: List[Dict]) -> Optional[str]:
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        "temperature": 0.2,
-        "max_tokens": 2400,
-        "stream": False,
-    }
-
-    # 简单重试机制
+    # 网络错误重试 + 输出截断时逐步提高 max_tokens 重试
     max_retries = 2
+    max_tokens = DEEPSEEK_MAX_TOKENS
     last_err: Optional[Exception] = None
 
-    for attempt in range(1, max_retries + 2):
-        try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=60)
-            resp.raise_for_status()
-            data = resp.json()
-            content = data["choices"][0]["message"]["content"]
-            return content.strip()
-        except Exception as e:
-            last_err = e
+    while max_tokens <= DEEPSEEK_MAX_TOKENS_CAP:
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": 0.2,
+            "max_tokens": max_tokens,
+            "stream": False,
+        }
+
+        content: Optional[str] = None
+        finish_reason = ""
+
+        for attempt in range(1, max_retries + 2):
+            try:
+                resp = requests.post(url, headers=headers, json=payload, timeout=120)
+                resp.raise_for_status()
+                data = resp.json()
+                choice = data["choices"][0]
+                content = (choice.get("message") or {}).get("content", "").strip()
+                finish_reason = choice.get("finish_reason") or ""
+                break
+            except Exception as e:
+                last_err = e
+                print(
+                    f"[WARN] 第 {attempt} 次调用 DeepSeek 失败：{e}",
+                    file=sys.stderr,
+                )
+                if attempt <= max_retries:
+                    time.sleep(3)
+
+        if content is None:
+            break
+
+        if finish_reason != "length" and _is_llm_output_complete(content):
+            return content
+
+        if max_tokens >= DEEPSEEK_MAX_TOKENS_CAP:
             print(
-                f"[WARN] 第 {attempt} 次调用 DeepSeek 失败：{e}",
+                "[WARN] DeepSeek 输出仍不完整（"
+                f"finish_reason={finish_reason!r}），将回退为原始列表",
                 file=sys.stderr,
             )
-            if attempt <= max_retries:
-                time.sleep(3)
+            return None
+
+        print(
+            f"[WARN] DeepSeek 输出不完整（finish_reason={finish_reason!r}），"
+            f"将 max_tokens 从 {max_tokens} 提高到 {min(max_tokens * 2, DEEPSEEK_MAX_TOKENS_CAP)} 后重试",
+            file=sys.stderr,
+        )
+        max_tokens = min(max_tokens * 2, DEEPSEEK_MAX_TOKENS_CAP)
 
     print(
         f"[WARN] DeepSeek 汇总多次失败，将回退为原始列表：{last_err}",
