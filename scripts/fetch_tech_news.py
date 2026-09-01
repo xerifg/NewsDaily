@@ -1069,7 +1069,12 @@ def archive_report(report_date: str, title: str, desp: str) -> Path:
     path = DOCS_DIR / f"{report_date}.md"
 
     now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    header = f"# {title}\n\n> 生成时间：{now_utc}\n\n---\n\n"
+    # YAML front matter 让 GitHub Pages / Jekyll 套用 docs/_layouts（一键复制等）
+    safe_title = title.replace('"', "'")
+    header = (
+        f"---\ntitle: \"{safe_title}\"\n---\n\n"
+        f"# {title}\n\n> 生成时间：{now_utc}\n\n---\n\n"
+    )
     path.write_text(header + desp.rstrip() + "\n", encoding="utf-8")
     print(f"Archived report to {path}")
 
@@ -1084,12 +1089,18 @@ def _update_archive_index() -> None:
         reverse=True,
     )
     lines = [
+        "---",
+        'title: "日报归档"',
+        "---",
+        "",
         "# 日报归档",
         "",
         "按日期倒序排列。开启 GitHub Pages（Settings → Pages → 分支选 main，目录选 /docs）后，本目录即可作为历史日报检索站点。",
         "",
+        "打开任意日期日报后，可用页顶「一键复制（含链接）」将全文复制到微信公众号编辑器。",
+        "",
     ]
-    lines.extend(f"- [{f.stem}]({f.name})" for f in files)
+    lines.extend(f"- [{f.stem}]({f.stem}.html)" for f in files)
     (DOCS_DIR / "index.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

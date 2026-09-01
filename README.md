@@ -2,7 +2,7 @@
 
 ## GitHub Actions 定时推送（AI · 自动驾驶 · 机器人 技术日报）
 
-每天定时（UTC 00:00 / 北京时间 08:00）抓取过去 24 小时 AI、自动驾驶、机器人/具身智能领域的资讯与论文，经 DeepSeek 汇总为五板块技术日报，通过 Server酱 推送到微信，并把全文归档到 `docs/` 目录。
+每天定时（UTC 00:17 / 北京时间 08:17）抓取过去 24 小时 AI、自动驾驶、机器人/具身智能领域的资讯与论文，经 DeepSeek 汇总为五板块技术日报，通过 Server酱 推送到微信，并把全文归档到 `docs/` 目录。
 
 工作流：`.github/workflows/daily_tech_news.yml`
 脚本：`scripts/fetch_tech_news.py`
@@ -67,6 +67,8 @@ GitHub Trending（当日 Top 10 开源项目，独立板块）──────
 每次运行会把当天日报全文（不受推送长度截断影响）写入 `docs/YYYY-MM-DD.md`，并自动刷新 `docs/index.md` 索引（按日期倒序），随后由 workflow 提交回仓库。
 
 要开启历史检索站点：仓库 **Settings → Pages → Source 选 "Deploy from a branch"、分支选 `main`、目录选 `/docs`**，之后 `https://<用户名>.github.io/<仓库名>/` 即为日报归档站（索引页为 `docs/index.md`）。
+
+**一键复制到公众号**：日期日报页顶部有「一键复制（含链接）」按钮，会把正文以富文本（含可点超链接）写入剪贴板，便于粘贴到微信公众号编辑器。实现依赖 `docs/_layouts/default.html` 与 `docs/assets/copy-report.js`；归档 Markdown 需带 YAML front matter（脚本已自动写入）。
 
 ### 推送渠道扩展
 

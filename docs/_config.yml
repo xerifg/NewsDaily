@@ -1,0 +1,13 @@
+title: NewsDaily
+description: AI · 自动驾驶 · 机器人技术日报归档
+baseurl: /NewsDaily
+url: https://xerifg.github.io
+
+exclude:
+  - superpowers
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if page.title %}{{ page.title }}{% else %}{{ page.name | remove: '.md' }} · NewsDaily{% endif %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.8.1/github-markdown.min.css">
+  <style>
+    :root {
+      --bar-bg: #f6f8fa;
+      --bar-border: #d0d7de;
+      --btn-bg: #1f6feb;
+      --btn-bg-hover: #1158c7;
+      --btn-ok: #1a7f37;
+      --btn-err: #cf222e;
+      --text: #1f2328;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
+      color: var(--text);
+      background: #ffffff;
+    }
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 10px 16px;
+      background: var(--bar-bg);
+      border-bottom: 1px solid var(--bar-border);
+    }
+    .toolbar a.home {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+      opacity: 0.85;
+    }
+    .toolbar a.home:hover { text-decoration: underline; }
+    .copy-btn {
+      border: 0;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      background: var(--btn-bg);
+      cursor: pointer;
+    }
+    .copy-btn:hover { background: var(--btn-bg-hover); }
+    .copy-btn:disabled { opacity: 0.7; cursor: default; }
+    .copy-btn.is-ok { background: var(--btn-ok); }
+    .copy-btn.is-err { background: var(--btn-err); }
+    .copy-hint {
+      font-size: 13px;
+      color: #656d76;
+    }
+    .page {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 24px 16px 64px;
+    }
+    .markdown-body {
+      box-sizing: border-box;
+      min-width: 0;
+    }
+  </style>
+</head>
+<body>
+  {% assign stem = page.name | remove: '.md' %}
+  {% assign date_bits = stem | split: '-' %}
+  {% assign is_report = false %}
+  {% if date_bits.size == 3 %}{% assign is_report = true %}{% endif %}
+
+  <header class="toolbar">
+    <a class="home" href="{{ site.baseurl }}/">← 日报归档</a>
+    {% if is_report %}
+    <button type="button" class="copy-btn" id="copy-report-btn" data-target="report-body">
+      一键复制（含链接）
+    </button>
+    <span class="copy-hint" id="copy-report-hint">复制后可直接粘贴到微信公众号编辑器</span>
+    {% endif %}
+  </header>
+
+  <div class="page">
+    <article id="report-body" class="markdown-body">
+      {{ content }}
+    </article>
+  </div>
+
+  {% if is_report %}
+  <script src="{{ site.baseurl }}/assets/copy-report.js"></script>
+  {% endif %}
+</body>
+</html>
