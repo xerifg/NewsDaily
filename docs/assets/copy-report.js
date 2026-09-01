@@ -3,12 +3,16 @@
 
   var P =
     "margin: 0 0 12px 0; line-height: 1.75; font-size: 16px; color: #333;";
+  var DESC =
+    "margin: 0 0 12px 0; line-height: 1.75; font-size: 16px; color: #555; padding-left: 1.5em;";
   var TITLE =
     "margin: 0 0 8px 0; line-height: 1.4; font-size: 22px; font-weight: bold; text-align: center; color: #333;";
   var META =
     "margin: 0 0 16px 0; line-height: 1.5; font-size: 14px; color: #888; text-align: center;";
   var HEADING =
     "margin: 18px 0 8px 0; line-height: 1.4; font-size: 18px; font-weight: bold; color: #333;";
+  var SEPARATOR =
+    "margin: 20px 0 8px 0; line-height: 0; font-size: 0; border-top: 1px solid #e8e8e8;";
   var LINK =
     "color: #576b95; text-decoration: underline; font-weight: bold;";
 
@@ -31,6 +35,14 @@
       .trim();
   }
 
+  function isMobile() {
+    return (
+      /Android|iPhone|iPad|iPod|Mobile|MicroMessenger/i.test(
+        navigator.userAgent
+      ) || window.innerWidth < 768
+    );
+  }
+
   function isSectionHeading(node) {
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return false;
     if (/^H[1-6]$/.test(node.tagName)) return true;
@@ -40,16 +52,69 @@
     return normalizeText(strong.textContent) === normalizeText(node.textContent);
   }
 
+  function textAfterLink(container, link) {
+    if (!container || !link) return "";
+
+    var after = "";
+    var pastLink = false;
+
+    function walk(node) {
+      if (node === link) {
+        pastLink = true;
+        return;
+      }
+      if (!pastLink) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          Array.prototype.forEach.call(node.childNodes, walk);
+        }
+        return;
+      }
+      if (node.nodeType === Node.TEXT_NODE) {
+        after += node.textContent;
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        Array.prototype.forEach.call(node.childNodes, walk);
+      }
+    }
+
+    walk(container);
+    return normalizeText(after);
+  }
+
   function extractBlocks(source) {
     var blocks = [];
+    var hasTitle = false;
+
+    function shouldSkipDateBanner(text) {
+      return hasTitle && /📅/.test(text) && /日报/.test(text);
+    }
 
     function push(block) {
+      if (block.type === "separator") {
+        blocks.push(block);
+        return;
+      }
+      if (block.type === "title") {
+        if (!block.text) return;
+        hasTitle = true;
+        blocks.push(block);
+        return;
+      }
+      if (block.type === "heading" && shouldSkipDateBanner(block.text)) {
+        return;
+      }
       if (block.type === "link") {
         if (!block.href || !block.text) return;
       } else if (!block.text) {
         return;
       }
       blocks.push(block);
+    }
+
+    function pushDescription(container, link) {
+      var desc = textAfterLink(container, link);
+      if (desc) {
+        push({ type: "text", text: desc, indent: true });
+      }
     }
 
     function processParagraph(p, prefix) {
@@ -64,6 +129,7 @@
           text: normalizeText(link.textContent),
           prefix: prefix || "",
         });
+        pushDescription(p, link);
         return;
       }
 
@@ -95,6 +161,7 @@
           text: normalizeText(link.textContent),
           prefix: index + ". ",
         });
+        pushDescription(li, link);
       } else {
         push({ type: "text", text: text, prefix: index + ". " });
       }
@@ -105,7 +172,10 @@
 
       var tag = node.tagName;
 
-      if (tag === "HR") return;
+      if (tag === "HR") {
+        push({ type: "separator" });
+        return;
+      }
 
       if (tag === "H1") {
         push({ type: "title", text: normalizeText(node.textContent) });
@@ -156,13 +226,14 @@
     for (var i = 0; i < blocks.length; i++) {
       var block = blocks[i];
 
+      if (block.type === "separator") {
+        html.push('<p style="' + SEPARATOR + '">&nbsp;</p>');
+        continue;
+      }
+
       if (block.type === "title") {
         html.push(
-          '<p style="' +
-            TITLE +
-            '">' +
-            escapeHtml(block.text) +
-            "</p>"
+          '<p style="' + TITLE + '">' + escapeHtml(block.text) + "</p>"
         );
         continue;
       }
@@ -176,11 +247,7 @@
 
       if (block.type === "heading") {
         html.push(
-          '<p style="' +
-            HEADING +
-            '">' +
-            escapeHtml(block.text) +
-            "</p>"
+          '<p style="' + HEADING + '">' + escapeHtml(block.text) + "</p>"
         );
         continue;
       }
@@ -202,9 +269,10 @@
         continue;
       }
 
+      var style = block.indent ? DESC : P;
       html.push(
         '<p style="' +
-          P +
+          style +
           '">' +
           escapeHtml(block.prefix || "") +
           escapeHtml(block.text) +
@@ -213,6 +281,45 @@
     }
 
     return "<section>" + html.join("") + "</section>";
+  }
+
+  function renderPlainText(blocks) {
+    var lines = [];
+
+    for (var i = 0; i < blocks.length; i++) {
+      var block = blocks[i];
+
+      if (block.type === "separator") {
+        lines.push("");
+        continue;
+      }
+
+      if (block.type === "title" || block.type === "heading") {
+        lines.push(block.text);
+        lines.push("");
+        continue;
+      }
+
+      if (block.type === "meta") {
+        lines.push(block.text);
+        lines.push("");
+        continue;
+      }
+
+      if (block.type === "link") {
+        lines.push((block.prefix || "") + block.text);
+        lines.push(block.href);
+        continue;
+      }
+
+      if (block.type === "text") {
+        var prefix = block.indent ? "   " : block.prefix || "";
+        lines.push(prefix + block.text);
+        continue;
+      }
+    }
+
+    return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
   }
 
   function buildCfHtml(fragment) {
@@ -280,6 +387,34 @@
     return header + body;
   }
 
+  function copyWithClipboardApi(htmlFragment, plainText) {
+    if (!navigator.clipboard || !navigator.clipboard.write) {
+      return Promise.reject(new Error("clipboard api unavailable"));
+    }
+
+    if (window.ClipboardItem) {
+      return navigator.clipboard
+        .write([
+          new ClipboardItem({
+            "text/html": new Blob([htmlFragment], { type: "text/html" }),
+            "text/plain": new Blob([plainText], { type: "text/plain" }),
+          }),
+        ])
+        .catch(function () {
+          if (navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(plainText);
+          }
+          return Promise.reject(new Error("clipboard write failed"));
+        });
+    }
+
+    if (navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(plainText);
+    }
+
+    return Promise.reject(new Error("clipboard api unsupported"));
+  }
+
   function copyNative(fragment) {
     return new Promise(function (resolve, reject) {
       var host = document.createElement("div");
@@ -312,13 +447,14 @@
     });
   }
 
-  function copyViaHtmlClipboard(fragment) {
+  function copyViaHtmlClipboard(fragment, plainText) {
     var cfHtml = buildCfHtml(fragment);
 
     return new Promise(function (resolve, reject) {
       function onCopy(e) {
         e.preventDefault();
         e.clipboardData.setData("text/html", cfHtml);
+        e.clipboardData.setData("text/plain", plainText);
       }
 
       document.addEventListener("copy", onCopy, true);
@@ -353,10 +489,23 @@
   }
 
   function copyReport(source) {
-    var fragment = renderWechatHtml(extractBlocks(source));
-    return copyNative(fragment).catch(function () {
-      return copyViaHtmlClipboard(fragment);
-    });
+    var blocks = extractBlocks(source);
+    var fragment = renderWechatHtml(blocks);
+    var plainText = renderPlainText(blocks);
+
+    return copyWithClipboardApi(fragment, plainText)
+      .catch(function () {
+        return copyViaHtmlClipboard(fragment, plainText);
+      })
+      .catch(function () {
+        return copyNative(fragment);
+      })
+      .catch(function () {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          return navigator.clipboard.writeText(plainText);
+        }
+        return Promise.reject(new Error("copy failed"));
+      });
   }
 
   function setState(btn, hint, kind, message) {
@@ -376,7 +525,12 @@
 
     var resetTimer = null;
     var defaultLabel = btn.textContent.trim();
-    var defaultHint = hint ? hint.textContent : "";
+    var mobile = isMobile();
+    var defaultHint = mobile
+      ? "复制后切换到公众号编辑器，长按粘贴；链接以网址行显示"
+      : "电脑端推荐 Chrome / Edge，复制后 Ctrl+V 粘贴到公众号编辑器";
+
+    if (hint) hint.textContent = defaultHint;
 
     btn.addEventListener("click", function () {
       btn.disabled = true;
@@ -387,7 +541,9 @@
             btn,
             hint,
             "is-ok",
-            "已复制（含可点链接），Ctrl+V 粘贴到公众号编辑器"
+            mobile
+              ? "已复制，切换到公众号编辑器长按粘贴"
+              : "已复制（含可点链接），Ctrl+V 粘贴到公众号编辑器"
           );
         })
         .catch(function () {
@@ -396,7 +552,9 @@
             btn,
             hint,
             "is-err",
-            "复制失败，请用 Chrome/Edge 打开后重试"
+            mobile
+              ? "复制失败，请长按页面重试或改用电脑浏览器"
+              : "复制失败，请用 Chrome/Edge 打开后重试"
           );
         })
         .finally(function () {
