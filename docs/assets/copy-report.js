@@ -9,6 +9,8 @@
     "margin: 0 0 8px 0; line-height: 1.4; font-size: 22px; font-weight: bold; text-align: center; color: #333;";
   var META =
     "margin: 0 0 16px 0; line-height: 1.5; font-size: 14px; color: #888; text-align: center;";
+  var SOURCE =
+    "margin: 0 0 16px 0; line-height: 1.5; font-size: 14px; color: #576b95; word-break: break-all;";
   var HEADING =
     "margin: 18px 0 8px 0; line-height: 1.4; font-size: 18px; font-weight: bold; color: #333;";
   var SEPARATOR =
@@ -33,14 +35,6 @@
       .replace(/\u00a0/g, " ")
       .replace(/\s+/g, " ")
       .trim();
-  }
-
-  function isMobile() {
-    return (
-      /Android|iPhone|iPad|iPod|Mobile|MicroMessenger/i.test(
-        navigator.userAgent
-      ) || window.innerWidth < 768
-    );
   }
 
   function isSectionHeading(node) {
@@ -220,6 +214,11 @@
     return blocks;
   }
 
+  function prependSourceUrl(blocks, sourceUrl) {
+    if (!sourceUrl) return blocks;
+    return [{ type: "source_url", url: sourceUrl }].concat(blocks);
+  }
+
   function renderWechatHtml(blocks) {
     var html = [];
 
@@ -228,6 +227,17 @@
 
       if (block.type === "separator") {
         html.push('<p style="' + SEPARATOR + '">&nbsp;</p>');
+        continue;
+      }
+
+      if (block.type === "source_url") {
+        html.push(
+          '<p style="' +
+            SOURCE +
+            '">原文链接：' +
+            escapeHtml(block.url) +
+            "</p>"
+        );
         continue;
       }
 
@@ -290,6 +300,12 @@
       var block = blocks[i];
 
       if (block.type === "separator") {
+        lines.push("");
+        continue;
+      }
+
+      if (block.type === "source_url") {
+        lines.push("原文链接：" + block.url);
         lines.push("");
         continue;
       }
@@ -488,8 +504,8 @@
     });
   }
 
-  function copyReport(source) {
-    var blocks = extractBlocks(source);
+  function copyReport(source, sourceUrl) {
+    var blocks = prependSourceUrl(extractBlocks(source), sourceUrl);
     var fragment = renderWechatHtml(blocks);
     var plainText = renderPlainText(blocks);
 
@@ -508,10 +524,9 @@
       });
   }
 
-  function setState(btn, hint, kind, message) {
+  function setState(btn, kind) {
     btn.classList.remove("is-ok", "is-err");
     if (kind) btn.classList.add(kind);
-    if (hint && message) hint.textContent = message;
   }
 
   function init() {
@@ -520,49 +535,31 @@
 
     var targetId = btn.getAttribute("data-target") || "report-body";
     var source = document.getElementById(targetId);
-    var hint = document.getElementById("copy-report-hint");
     if (!source) return;
 
+    var sourceUrl =
+      btn.getAttribute("data-source-url") ||
+      window.location.href.split("#")[0].split("?")[0];
     var resetTimer = null;
     var defaultLabel = btn.textContent.trim();
-    var mobile = isMobile();
-    var defaultHint = mobile
-      ? "复制后切换到公众号编辑器，长按粘贴；链接以网址行显示"
-      : "电脑端推荐 Chrome / Edge，复制后 Ctrl+V 粘贴到公众号编辑器";
-
-    if (hint) hint.textContent = defaultHint;
 
     btn.addEventListener("click", function () {
       btn.disabled = true;
-      copyReport(source)
+      copyReport(source, sourceUrl)
         .then(function () {
           btn.textContent = "已复制";
-          setState(
-            btn,
-            hint,
-            "is-ok",
-            mobile
-              ? "已复制，切换到公众号编辑器长按粘贴"
-              : "已复制（含可点链接），Ctrl+V 粘贴到公众号编辑器"
-          );
+          setState(btn, "is-ok");
         })
         .catch(function () {
           btn.textContent = "复制失败";
-          setState(
-            btn,
-            hint,
-            "is-err",
-            mobile
-              ? "复制失败，请长按页面重试或改用电脑浏览器"
-              : "复制失败，请用 Chrome/Edge 打开后重试"
-          );
+          setState(btn, "is-err");
         })
         .finally(function () {
           btn.disabled = false;
           if (resetTimer) clearTimeout(resetTimer);
           resetTimer = setTimeout(function () {
             btn.textContent = defaultLabel;
-            setState(btn, hint, null, defaultHint);
+            setState(btn, null);
           }, 3200);
         });
     });

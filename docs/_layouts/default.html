@@ -55,10 +55,6 @@
     .copy-btn:disabled { opacity: 0.7; cursor: default; }
     .copy-btn.is-ok { background: var(--btn-ok); }
     .copy-btn.is-err { background: var(--btn-err); }
-    .copy-hint {
-      font-size: 13px;
-      color: #656d76;
-    }
     .page {
       max-width: 860px;
       margin: 0 auto;
@@ -79,10 +75,15 @@
   <header class="toolbar">
     <a class="home" href="{{ site.baseurl }}/">← 日报归档</a>
     {% if is_report %}
-    <button type="button" class="copy-btn" id="copy-report-btn" data-target="report-body">
+    <button
+      type="button"
+      class="copy-btn"
+      id="copy-report-btn"
+      data-target="report-body"
+      data-source-url="{{ page.url | absolute_url }}"
+    >
       一键复制（含链接）
     </button>
-    <span class="copy-hint" id="copy-report-hint">复制后粘贴到公众号编辑器；手机请长按粘贴，电脑推荐 Chrome / Edge</span>
     {% endif %}
   </header>
 
@@ -93,7 +94,7 @@
   </div>
 
   {% if is_report %}
-  <script src="{{ site.baseurl }}/assets/copy-report.js?v=3"></script>
+  <script src="{{ site.baseurl }}/assets/copy-report.js?v=5"></script>
   {% endif %}
 </body>
 </html>
