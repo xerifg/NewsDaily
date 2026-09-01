@@ -1,203 +1,294 @@
 (function () {
   "use strict";
 
-  var WECHAT_STYLES = {
-    a: "color: #576b95; text-decoration: underline;",
-    strong: "font-weight: bold;",
-    b: "font-weight: bold;",
-    em: "font-style: italic;",
-    i: "font-style: italic;",
-    p: "margin: 0 0 1em 0; line-height: 1.75; font-size: 16px;",
-    h1: "font-size: 22px; font-weight: bold; margin: 1.2em 0 0.6em 0; line-height: 1.4;",
-    h2: "font-size: 20px; font-weight: bold; margin: 1.1em 0 0.5em 0; line-height: 1.4;",
-    h3: "font-size: 18px; font-weight: bold; margin: 1em 0 0.5em 0; line-height: 1.4;",
-    h4: "font-size: 17px; font-weight: bold; margin: 0.9em 0 0.4em 0; line-height: 1.4;",
-    h5: "font-size: 16px; font-weight: bold; margin: 0.8em 0 0.4em 0; line-height: 1.4;",
-    h6: "font-size: 16px; font-weight: bold; margin: 0.8em 0 0.4em 0; line-height: 1.4;",
-    ul: "margin: 0 0 1em 0; padding-left: 1.5em;",
-    ol: "margin: 0 0 1em 0; padding-left: 1.5em;",
-    li: "margin: 0.35em 0; line-height: 1.75; font-size: 16px;",
-    blockquote:
-      "margin: 0 0 1em 0; padding: 0.5em 1em; border-left: 3px solid #d0d7de; color: #656d76;",
-    hr: "border: none; border-top: 1px solid #d0d7de; margin: 1.5em 0;",
-    code: "font-family: Consolas, monospace; background: #f6f8fa; padding: 0.1em 0.3em; border-radius: 3px;",
-    pre: "margin: 0 0 1em 0; padding: 12px; background: #f6f8fa; border-radius: 6px; overflow-x: auto;",
-  };
+  var P =
+    "margin: 0 0 12px 0; line-height: 1.75; font-size: 16px; color: #333;";
+  var TITLE =
+    "margin: 0 0 8px 0; line-height: 1.4; font-size: 22px; font-weight: bold; text-align: center; color: #333;";
+  var META =
+    "margin: 0 0 16px 0; line-height: 1.5; font-size: 14px; color: #888; text-align: center;";
+  var HEADING =
+    "margin: 18px 0 8px 0; line-height: 1.4; font-size: 18px; font-weight: bold; color: #333;";
+  var LINK =
+    "color: #576b95; text-decoration: underline; font-weight: bold;";
 
-  var ALLOWED_TAGS = {
-    A: true,
-    P: true,
-    BR: true,
-    STRONG: true,
-    B: true,
-    EM: true,
-    I: true,
-    H1: true,
-    H2: true,
-    H3: true,
-    H4: true,
-    H5: true,
-    H6: true,
-    UL: true,
-    OL: true,
-    LI: true,
-    BLOCKQUOTE: true,
-    HR: true,
-    CODE: true,
-    PRE: true,
-    SPAN: true,
-    DIV: true,
-  };
-
-  function mergeStyle(existing, extra) {
-    if (!existing) return extra;
-    if (!extra) return existing;
-    return existing.replace(/;\s*$/, "") + "; " + extra;
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
-  function applyInlineStyle(el, tag) {
-    var style = WECHAT_STYLES[tag];
-    if (style) {
-      el.setAttribute("style", mergeStyle(el.getAttribute("style"), style));
-    }
+  function escapeAttr(value) {
+    return escapeHtml(value).replace(/'/g, "&#39;");
   }
 
-  function isBoldWrapper(node) {
+  function normalizeText(value) {
+    return String(value || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function isSectionHeading(node) {
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return false;
-    var tag = node.tagName;
-    return tag === "STRONG" || tag === "B";
+    if (/^H[1-6]$/.test(node.tagName)) return true;
+    if (node.tagName !== "P") return false;
+    var strong = node.querySelector("strong");
+    if (!strong) return false;
+    return normalizeText(strong.textContent) === normalizeText(node.textContent);
   }
 
-  function unwrapBoldLink(node) {
-    if (node.tagName !== "A") return node;
-    var child = node.firstElementChild;
-    if (
-      child &&
-      node.childElementCount === 1 &&
-      isBoldWrapper(child) &&
-      child.textContent === node.textContent
-    ) {
-      var href = node.getAttribute("href");
-      var a = document.createElement("a");
-      if (href) {
-        a.setAttribute("href", href);
-        a.setAttribute("target", "_blank");
+  function extractBlocks(source) {
+    var blocks = [];
+
+    function push(block) {
+      if (block.type === "link") {
+        if (!block.href || !block.text) return;
+      } else if (!block.text) {
+        return;
       }
-      a.setAttribute(
-        "style",
-        mergeStyle(WECHAT_STYLES.a, "font-weight: bold;")
-      );
-      a.textContent = child.textContent;
-      return a;
-    }
-    return node;
-  }
-
-  function cleanNode(node) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      return document.createTextNode(node.nodeValue);
-    }
-    if (node.nodeType !== Node.ELEMENT_NODE) {
-      return null;
+      blocks.push(block);
     }
 
-    var tag = node.tagName;
-    if (!ALLOWED_TAGS[tag]) {
-      var frag = document.createDocumentFragment();
-      Array.prototype.forEach.call(node.childNodes, function (child) {
-        var cleaned = cleanNode(child);
-        if (cleaned) frag.appendChild(cleaned);
-      });
-      return frag;
+    function processParagraph(p, prefix) {
+      var text = normalizeText(p.textContent);
+      if (!text) return;
+
+      var link = p.querySelector("a");
+      if (link) {
+        push({
+          type: "link",
+          href: link.href,
+          text: normalizeText(link.textContent),
+          prefix: prefix || "",
+        });
+        return;
+      }
+
+      if (isSectionHeading(p)) {
+        push({ type: "heading", text: text });
+        return;
+      }
+
+      push({ type: "text", text: text, prefix: prefix || "" });
     }
 
-    var el = document.createElement(tag.toLowerCase());
-    if (tag === "A") {
-      var href = node.getAttribute("href");
-      if (href) {
-        el.setAttribute("href", href);
-        el.setAttribute("target", "_blank");
+    function processListItem(li, index) {
+      var paragraphs = li.querySelectorAll(":scope > p");
+      if (paragraphs.length) {
+        for (var i = 0; i < paragraphs.length; i++) {
+          processParagraph(paragraphs[i], i === 0 ? index + ". " : "");
+        }
+        return;
+      }
+
+      var link = li.querySelector("a");
+      var text = normalizeText(li.textContent);
+      if (!text) return;
+
+      if (link) {
+        push({
+          type: "link",
+          href: link.href,
+          text: normalizeText(link.textContent),
+          prefix: index + ". ",
+        });
+      } else {
+        push({ type: "text", text: text, prefix: index + ". " });
       }
     }
 
-    Array.prototype.forEach.call(node.childNodes, function (child) {
-      var cleaned = cleanNode(child);
-      if (cleaned) el.appendChild(cleaned);
-    });
-
-    el = unwrapBoldLink(el);
-    applyInlineStyle(el, el.tagName.toLowerCase());
-    return el;
-  }
-
-  function buildFragmentHtml(source) {
-    var wrapper = document.createElement("div");
-    Array.prototype.forEach.call(source.childNodes, function (child) {
-      var cleaned = cleanNode(child);
-      if (cleaned) wrapper.appendChild(cleaned);
-    });
-    return wrapper.innerHTML;
-  }
-
-  function wrapClipboardHtml(fragment) {
-    return (
-      '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' +
-      "<!--StartFragment-->" +
-      fragment +
-      "<!--EndFragment-->" +
-      "</body></html>"
-    );
-  }
-
-  function buildPlainText(source) {
-    var lines = [];
     function walk(node) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        var text = node.nodeValue;
-        if (text) lines.push(text);
-        return;
-      }
-      if (node.nodeType !== Node.ELEMENT_NODE) return;
+      if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
+
       var tag = node.tagName;
-      if (tag === "A") {
-        var label = (node.textContent || "").trim();
-        var href = node.getAttribute("href") || "";
-        if (label && href) lines.push(label + " (" + href + ")");
-        else if (label) lines.push(label);
-        else if (href) lines.push(href);
+
+      if (tag === "HR") return;
+
+      if (tag === "H1") {
+        push({ type: "title", text: normalizeText(node.textContent) });
         return;
       }
-      if (tag === "BR") {
-        lines.push("\n");
+
+      if (tag === "BLOCKQUOTE") {
+        push({ type: "meta", text: normalizeText(node.textContent) });
         return;
       }
-      if (tag === "P" || tag === "LI" || /^H[1-6]$/.test(tag)) {
-        if (lines.length && lines[lines.length - 1] !== "\n") lines.push("\n");
+
+      if (/^H[2-6]$/.test(tag)) {
+        push({ type: "heading", text: normalizeText(node.textContent) });
+        return;
       }
-      Array.prototype.forEach.call(node.childNodes, walk);
-      if (tag === "P" || tag === "LI" || /^H[1-6]$/.test(tag)) {
-        lines.push("\n");
+
+      if (tag === "OL") {
+        var items = node.querySelectorAll(":scope > li");
+        for (var i = 0; i < items.length; i++) {
+          processListItem(items[i], i + 1);
+        }
+        return;
       }
+
+      if (tag === "UL") {
+        var ulItems = node.querySelectorAll(":scope > li");
+        for (var j = 0; j < ulItems.length; j++) {
+          processListItem(ulItems[j], j + 1);
+        }
+        return;
+      }
+
+      if (tag === "P") {
+        processParagraph(node, "");
+        return;
+      }
+
+      Array.prototype.forEach.call(node.children, walk);
     }
-    walk(source);
-    return lines.join("").replace(/\n{3,}/g, "\n\n").trim();
+
+    Array.prototype.forEach.call(source.children, walk);
+    return blocks;
   }
 
-  function copyViaCopyEvent(html, plainText) {
-    return new Promise(function (resolve, reject) {
-      function onCopy(e) {
-        e.preventDefault();
-        e.clipboardData.setData("text/html", html);
-        e.clipboardData.setData("text/plain", plainText);
+  function renderWechatHtml(blocks) {
+    var html = [];
+
+    for (var i = 0; i < blocks.length; i++) {
+      var block = blocks[i];
+
+      if (block.type === "title") {
+        html.push(
+          '<p style="' +
+            TITLE +
+            '">' +
+            escapeHtml(block.text) +
+            "</p>"
+        );
+        continue;
       }
 
-      document.addEventListener("copy", onCopy);
+      if (block.type === "meta") {
+        html.push(
+          '<p style="' + META + '">' + escapeHtml(block.text) + "</p>"
+        );
+        continue;
+      }
+
+      if (block.type === "heading") {
+        html.push(
+          '<p style="' +
+            HEADING +
+            '">' +
+            escapeHtml(block.text) +
+            "</p>"
+        );
+        continue;
+      }
+
+      if (block.type === "link") {
+        html.push(
+          '<p style="' +
+            P +
+            '">' +
+            escapeHtml(block.prefix || "") +
+            '<a href="' +
+            escapeAttr(block.href) +
+            '" target="_blank" style="' +
+            LINK +
+            '">' +
+            escapeHtml(block.text) +
+            "</a></p>"
+        );
+        continue;
+      }
+
+      html.push(
+        '<p style="' +
+          P +
+          '">' +
+          escapeHtml(block.prefix || "") +
+          escapeHtml(block.text) +
+          "</p>"
+      );
+    }
+
+    return "<section>" + html.join("") + "</section>";
+  }
+
+  function buildCfHtml(fragment) {
+    var body =
+      '<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head><body><!--StartFragment-->' +
+      fragment +
+      "<!--EndFragment--></body></html>";
+    var placeholder =
+      "Version:0.9\r\nStartHTML:0000000000\r\nEndHTML:0000000000\r\nStartFragment:0000000000\r\nEndFragment:0000000000\r\n";
+    var draft = placeholder + body;
+    var encoder = new TextEncoder();
+
+    function byteOffset(charIndex) {
+      return encoder.encode(draft.slice(0, charIndex)).length;
+    }
+
+    var startHtml = byteOffset(draft.indexOf("<html>"));
+    var startFragment =
+      byteOffset(draft.indexOf("<!--StartFragment-->")) +
+      "<!--StartFragment-->".length;
+    var endFragment = byteOffset(draft.indexOf("<!--EndFragment-->"));
+    var endHtml = byteOffset(draft.length);
+    var pad = function (n) {
+      return ("0000000000" + n).slice(-10);
+    };
+
+    var header =
+      "Version:0.9\r\n" +
+      "StartHTML:" +
+      pad(startHtml) +
+      "\r\n" +
+      "EndHTML:" +
+      pad(endHtml) +
+      "\r\n" +
+      "StartFragment:" +
+      pad(startFragment) +
+      "\r\n" +
+      "EndFragment:" +
+      pad(endFragment) +
+      "\r\n";
+
+    draft = header + body;
+    startHtml = byteOffset(draft.indexOf("<html>"));
+    startFragment =
+      byteOffset(draft.indexOf("<!--StartFragment-->")) +
+      "<!--StartFragment-->".length;
+    endFragment = byteOffset(draft.indexOf("<!--EndFragment-->"));
+    endHtml = byteOffset(draft.length);
+
+    header =
+      "Version:0.9\r\n" +
+      "StartHTML:" +
+      pad(startHtml) +
+      "\r\n" +
+      "EndHTML:" +
+      pad(endHtml) +
+      "\r\n" +
+      "StartFragment:" +
+      pad(startFragment) +
+      "\r\n" +
+      "EndFragment:" +
+      pad(endFragment) +
+      "\r\n";
+
+    return header + body;
+  }
+
+  function copyNative(fragment) {
+    return new Promise(function (resolve, reject) {
       var host = document.createElement("div");
       host.setAttribute("contenteditable", "true");
       host.style.position = "fixed";
       host.style.left = "-9999px";
       host.style.top = "0";
-      host.innerHTML = html;
+      host.style.opacity = "0";
+      host.innerHTML = fragment;
       document.body.appendChild(host);
 
       var selection = window.getSelection();
@@ -215,31 +306,56 @@
 
       selection.removeAllRanges();
       document.body.removeChild(host);
-      document.removeEventListener("copy", onCopy);
 
       if (ok) resolve();
-      else reject(new Error("copy failed"));
+      else reject(new Error("native copy failed"));
     });
   }
 
-  function copyViaClipboardApi(html, plainText) {
-    if (!navigator.clipboard || !window.ClipboardItem) {
-      return Promise.reject(new Error("clipboard api unavailable"));
-    }
-    var item = new ClipboardItem({
-      "text/html": new Blob([html], { type: "text/html" }),
-      "text/plain": new Blob([plainText], { type: "text/plain" }),
+  function copyViaHtmlClipboard(fragment) {
+    var cfHtml = buildCfHtml(fragment);
+
+    return new Promise(function (resolve, reject) {
+      function onCopy(e) {
+        e.preventDefault();
+        e.clipboardData.setData("text/html", cfHtml);
+      }
+
+      document.addEventListener("copy", onCopy, true);
+      var host = document.createElement("div");
+      host.setAttribute("contenteditable", "true");
+      host.style.position = "fixed";
+      host.style.left = "-9999px";
+      host.style.top = "0";
+      host.innerHTML = fragment;
+      document.body.appendChild(host);
+
+      var selection = window.getSelection();
+      var range = document.createRange();
+      range.selectNodeContents(host);
+      selection.removeAllRanges();
+      selection.addRange(range);
+
+      var ok = false;
+      try {
+        ok = document.execCommand("copy");
+      } catch (err) {
+        ok = false;
+      }
+
+      selection.removeAllRanges();
+      document.body.removeChild(host);
+      document.removeEventListener("copy", onCopy, true);
+
+      if (ok) resolve();
+      else reject(new Error("html clipboard failed"));
     });
-    return navigator.clipboard.write([item]);
   }
 
   function copyReport(source) {
-    var fragment = buildFragmentHtml(source);
-    var html = wrapClipboardHtml(fragment);
-    var plainText = buildPlainText(source);
-
-    return copyViaCopyEvent(html, plainText).catch(function () {
-      return copyViaClipboardApi(html, plainText);
+    var fragment = renderWechatHtml(extractBlocks(source));
+    return copyNative(fragment).catch(function () {
+      return copyViaHtmlClipboard(fragment);
     });
   }
 
@@ -271,7 +387,7 @@
             btn,
             hint,
             "is-ok",
-            "已复制（含链接），请用 Ctrl+V 粘贴到公众号编辑器"
+            "已复制（含可点链接），Ctrl+V 粘贴到公众号编辑器"
           );
         })
         .catch(function () {
@@ -280,7 +396,7 @@
             btn,
             hint,
             "is-err",
-            "复制失败，请用 Chrome/Edge 打开后重试，或手动全选复制"
+            "复制失败，请用 Chrome/Edge 打开后重试"
           );
         })
         .finally(function () {
