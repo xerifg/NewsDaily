@@ -41,7 +41,7 @@ jobs:
           DEEPSEEK_BASE_URL: ${{ vars.DEEPSEEK_BASE_URL }}
           # 可选：日报正文 LLM 输出 token 上限，默认 12288
           DEEPSEEK_MAX_TOKENS: ${{ vars.DEEPSEEK_MAX_TOKENS }}
-          # 可选：微信摘要版 LLM 输出 token 上限，默认 2048
+          # 可选：微信摘要版 LLM 输出 token 上限，默认 4096
           DEEPSEEK_DIGEST_MAX_TOKENS: ${{ vars.DEEPSEEK_DIGEST_MAX_TOKENS }}
           # 可选：逗号分隔多个渠道，默认 serverchan
           PUSH_CHANNELS: ${{ vars.PUSH_CHANNELS }}
