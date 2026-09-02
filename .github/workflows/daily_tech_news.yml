@@ -2,10 +2,8 @@ name: Daily Tech News to WeChat
 
 on:
   schedule:
-    # GitHub Actions 使用 UTC，这里是每天 00:17 UTC = 北京时间 08:17
-    # 刻意避开整点：GitHub 在每小时整点负载最高，schedule 任务可能被延迟甚至丢弃
-    # （仍错开 arXiv 论文公告的刷新时间，保证当天批次能被抓到）
-    - cron: '17 0 * * *'
+    # GitHub Actions 使用 UTC，这里是每天 02:23 UTC = 北京时间 10:23
+    - cron: '23 2 * * *'
   # 手动触发，方便调试
   workflow_dispatch:
 
