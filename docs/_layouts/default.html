@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% if page.title %}{{ page.title }}{% else %}{{ page.name | remove: '.md' }} · NewsDaily{% endif %}</title>
+  <link rel="alternate" type="application/rss+xml" title="NewsDaily · 技术日报" href="{{ '/feed.xml' | absolute_url }}">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.8.1/github-markdown.min.css">
   <style>
     :root {
@@ -74,6 +75,7 @@
 
   <header class="toolbar">
     <a class="home" href="{{ site.baseurl }}/">← 日报归档</a>
+    <a class="home" href="{{ site.baseurl }}/feed.xml">RSS 订阅</a>
     {% if is_report %}
     <button
       type="button"

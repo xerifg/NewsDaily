@@ -4,7 +4,7 @@ title: "日报归档"
 
 # 日报归档
 
-按日期倒序排列。开启 GitHub Pages（Settings → Pages → 分支选 main，目录选 /docs）后，本目录即可作为历史日报检索站点。
+按日期倒序排列。开启 GitHub Pages（Settings → Pages → Source 选 GitHub Actions）后，本目录即可作为历史日报检索站点。
 
 打开任意日期日报后，可用页顶「一键复制（含链接）」将全文复制到微信公众号编辑器。
 

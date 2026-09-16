@@ -1,7 +1,7 @@
 import os
 import sys
 from datetime import datetime, timedelta, timezone
-from email.utils import parsedate_to_datetime
+from email.utils import format_datetime, parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import xml.etree.ElementTree as ET
@@ -11,6 +11,7 @@ import time
 
 import requests
 import yaml
+import markdown
 
 
 # 浏览器 UA：很多站点（量子位、Google News 等）会拦截默认的 python-requests UA
@@ -1063,7 +1064,7 @@ def _build_push_desp(digest: Optional[str], report: str, full_url: str) -> str:
 
 def archive_report(report_date: str, title: str, desp: str) -> Path:
     """
-    把日报（未截断全文）归档为 Markdown，并刷新归档索引。
+    把日报（未截断全文）归档为 Markdown，并刷新归档索引与 RSS。
     """
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
     path = DOCS_DIR / f"{report_date}.md"
@@ -1079,6 +1080,7 @@ def archive_report(report_date: str, title: str, desp: str) -> Path:
     print(f"Archived report to {path}")
 
     _update_archive_index()
+    _update_rss_feed()
     return path
 
 
@@ -1095,13 +1097,64 @@ def _update_archive_index() -> None:
         "",
         "# 日报归档",
         "",
-        "按日期倒序排列。开启 GitHub Pages（Settings → Pages → 分支选 main，目录选 /docs）后，本目录即可作为历史日报检索站点。",
+        "按日期倒序排列。开启 GitHub Pages（Settings → Pages → Source 选 GitHub Actions）后，本目录即可作为历史日报检索站点。",
         "",
         "打开任意日期日报后，可用页顶「一键复制（含链接）」将全文复制到微信公众号编辑器。",
         "",
     ]
     lines.extend(f"- [{f.stem}]({f.stem}.html)" for f in files)
     (DOCS_DIR / "index.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _update_rss_feed() -> Path:
+    """从最近 30 份归档生成全文 RSS 2.0；按日报 URL 去重。"""
+    atom_ns = "http://www.w3.org/2005/Atom"
+    ET.register_namespace("atom", atom_ns)
+    rss = ET.Element("rss", version="2.0")
+    channel = ET.SubElement(rss, "channel")
+    ET.SubElement(channel, "title").text = "NewsDaily · 技术日报"
+    ET.SubElement(channel, "link").text = f"{SITE_URL}/"
+    ET.SubElement(channel, "description").text = "AI · 自动驾驶 · 机器人技术日报全文订阅"
+    ET.SubElement(channel, "language").text = "zh-CN"
+    ET.SubElement(channel, "ttl").text = "60"
+    ET.SubElement(channel, f"{{{atom_ns}}}link", {
+        "href": f"{SITE_URL}/feed.xml", "rel": "self", "type": "application/rss+xml",
+    })
+    files = sorted(
+        (f for f in DOCS_DIR.glob("*.md") if re.fullmatch(r"\d{4}-\d{2}-\d{2}", f.stem)),
+        reverse=True,
+    )[:30]
+    published_dates = []
+    for path in files:
+        body = path.read_text(encoding="utf-8")
+        metadata = {}
+        front_matter = re.match(r"\A---\n(.*?)\n---\n", body, re.DOTALL)
+        if front_matter:
+            metadata = yaml.safe_load(front_matter.group(1)) or {}
+            body = body[front_matter.end():].lstrip()
+        generated = re.search(r"^> 生成时间：(\d{4}-\d{2}-\d{2} \d{2}:\d{2}) UTC$", body, re.MULTILINE)
+        published = (
+            datetime.strptime(generated.group(1), "%Y-%m-%d %H:%M")
+            if generated else datetime.strptime(path.stem, "%Y-%m-%d")
+        ).replace(tzinfo=timezone.utc)
+        published_dates.append(published)
+        url = f"{SITE_URL}/{path.stem}.html"
+        item = ET.SubElement(channel, "item")
+        ET.SubElement(item, "title").text = metadata.get("title") or f"技术日报（{path.stem}）"
+        ET.SubElement(item, "link").text = url
+        ET.SubElement(item, "guid", isPermaLink="true").text = url
+        ET.SubElement(item, "pubDate").text = format_datetime(published, usegmt=True)
+        ET.SubElement(item, "description").text = markdown.markdown(
+            body, extensions=["tables", "fenced_code", "sane_lists"],
+        )
+    if published_dates:
+        ET.SubElement(channel, "lastBuildDate").text = format_datetime(max(published_dates), usegmt=True)
+    DOCS_DIR.mkdir(parents=True, exist_ok=True)
+    path = DOCS_DIR / "feed.xml"
+    ET.indent(rss, space="  ")
+    ET.ElementTree(rss).write(path, encoding="utf-8", xml_declaration=True)
+    print(f"Updated RSS feed: {path} ({len(files)} reports)")
+    return path
 
 
 # ============================================================
@@ -1193,6 +1246,12 @@ def get_push_channels() -> List[PushChannel]:
 
 def main() -> None:
     dry_run = "--dry-run" in sys.argv
+    if "--rss-only" in sys.argv:
+        if dry_run:
+            print("[DRY RUN] Would rebuild docs/feed.xml from existing archives")
+        else:
+            _update_rss_feed()
+        return
 
     print("Collecting AI / autonomous driving / robotics news...")
     news_items = collect_all_news()

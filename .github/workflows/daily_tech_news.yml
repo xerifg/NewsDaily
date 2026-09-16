@@ -53,6 +53,8 @@ jobs:
           python scripts/fetch_tech_news.py
 
       - name: Commit daily report archive
+        # 微信推送失败时，仍保存已生成的日报与 RSS，供 Pages 发布。
+        if: ${{ !cancelled() }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

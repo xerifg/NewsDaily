@@ -66,9 +66,29 @@ GitHub Trending（当日 Top 10 开源项目，独立板块）──────
 
 每次运行会把当天日报全文（不受推送长度截断影响）写入 `docs/YYYY-MM-DD.md`，并自动刷新 `docs/index.md` 索引（按日期倒序），随后由 workflow 提交回仓库。
 
-要开启历史检索站点：仓库 **Settings → Pages → Source 选 "Deploy from a branch"、分支选 `main`、目录选 `/docs`**，之后 `https://<用户名>.github.io/<仓库名>/` 即为日报归档站（索引页为 `docs/index.md`）。
+要开启历史检索站点：仓库 **Settings → Pages → Source 选 "GitHub Actions"**，由 `.github/workflows/publish_pages.yml` 构建 `docs/` 并发布，之后 `https://<用户名>.github.io/<仓库名>/` 即为日报归档站（索引页为 `docs/index.md`）。首次启用可手动运行 **Publish daily reports and RSS** 工作流。
 
 **一键复制到公众号**：日期日报页顶部有「一键复制（含链接）」按钮，会把正文以富文本（含可点超链接）写入剪贴板，便于粘贴到微信公众号编辑器。实现依赖 `docs/_layouts/default.html` 与 `docs/assets/copy-report.js`；归档 Markdown 需带 YAML front matter（脚本已自动写入）。
+
+### RSS 全文订阅（Folo 等阅读器）
+
+站点发布后，在 Folo 或其他 RSS 阅读器中添加订阅地址：
+
+**https://xerifg.github.io/NewsDaily/feed.xml**
+
+- 每份日报对应一条订阅内容，包含可直接阅读的全文、新闻超链接和日报原文地址。
+- 保留最近 30 份日报，按日期倒序；更早的内容仍可在归档站查看。
+- 每次归档自动更新 `docs/feed.xml`，同一天重新生成沿用原文 URL 作为 GUID，避免阅读器当作新日报重复收录。
+- 归档页和日报页顶部有「RSS 订阅」入口，也声明了 RSS 自动发现地址。
+- 日报任务结束后自动发布网站和 RSS；微信推送失败时，已生成的归档仍会提交并发布。阅读器实际显示时间取决于其抓取频率。
+
+**已有 Pages 站点也需把 Source 改为 GitHub Actions**：原来使用 `GITHUB_TOKEN` 提交归档不会触发分支模式的 Pages 构建，新的发布工作流通过 `workflow_run` 在日报任务结束后触发，确保 RSS 每日更新（[GitHub 官方说明](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)）。
+
+如使用自己的站点地址，请同步修改 Actions Variable `SITE_URL` 和 `docs/_config.yml` 中的 `url` / `baseurl`，订阅地址为 `<SITE_URL>/feed.xml`。修改后可用下方命令从现有归档重建 RSS，无需抓取新闻、调用 AI 或发送微信：
+
+```bash
+python scripts/fetch_tech_news.py --rss-only
+```
 
 ### 推送渠道扩展
 
@@ -85,6 +105,7 @@ GitHub Trending（当日 Top 10 开源项目，独立板块）──────
 pip install -r requirements.txt
 python scripts/fetch_tech_news.py --dry-run   # 只抓取并打印日报，不推送、不归档
 python scripts/fetch_tech_news.py --config path/to/feeds.yaml  # 指定其他配置文件
+python -m unittest discover -s tests -v  # 验证 RSS 生成和归档集成，不访问网络
 ```
 
 ### 自定义（改配置即可，无需动代码）
